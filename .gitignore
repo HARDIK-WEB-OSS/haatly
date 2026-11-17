@@ -1,0 +1,15 @@
+_reference/
+.env
+.env.*
+!.env.example
+.venv/
+__pycache__/
+*.pyc
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.coverage
+htmlcov/
+dist/
+*.egg-info/
+.tigerbeetle/
