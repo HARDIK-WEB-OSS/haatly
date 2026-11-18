@@ -32,17 +32,17 @@ async def test_app_role_cannot_bypass_row_level_security(app_engine: AsyncEngine
     assert await scalar(app_engine, sql) is False
 
 
-async def test_owner_role_is_not_a_superuser(owner_engine: AsyncEngine) -> None:
-    sql = "SELECT rolbypassrls OR rolsuper FROM pg_roles WHERE rolname = current_user"
-    assert await scalar(owner_engine, sql) is False
+async def test_owner_role_is_not_a_superuser(app_engine: AsyncEngine) -> None:
+    sql = "SELECT rolbypassrls OR rolsuper FROM pg_roles WHERE rolname = 'haatly_owner'"
+    assert await scalar(app_engine, sql) is False
 
 
-async def test_ops_role_logs_every_statement(owner_engine: AsyncEngine) -> None:
+async def test_ops_role_logs_every_statement(app_engine: AsyncEngine) -> None:
     sql = (
         "SELECT array_to_string(setconfig, ',') FROM pg_db_role_setting "
         "JOIN pg_roles ON pg_roles.oid = setrole WHERE rolname = 'haatly_ops'"
     )
-    assert "log_statement=all" in str(await scalar(owner_engine, sql))
+    assert "log_statement=all" in str(await scalar(app_engine, sql))
 
 
 async def test_app_role_can_use_platform_tables(app_engine: AsyncEngine) -> None:

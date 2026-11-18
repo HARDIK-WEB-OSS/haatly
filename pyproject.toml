@@ -13,6 +13,7 @@ dependencies = [
     "pydantic-settings>=2.11",
     "alembic>=1.17",
     "tigerbeetle==0.17.9",
+    "argon2-cffi>=25.1",
 ]
 
 [dependency-groups]
@@ -79,6 +80,7 @@ filterwarnings = ["error"]
 [tool.coverage.run]
 source = ["haatly"]
 branch = true
+concurrency = ["greenlet", "thread"]
 
 [tool.coverage.report]
 fail_under = 90
@@ -122,15 +124,63 @@ allowed_importers = ["haatly.ledger"]
 as_packages = true
 
 [[tool.importlinter.contracts]]
+name = "identity layers"
+type = "layers"
+layers = ["haatly.identity.public", "haatly.identity.adapters", "haatly.identity.app", "haatly.identity.domain"]
+
+[[tool.importlinter.contracts]]
+name = "identity internals are reachable only through identity.public"
+type = "protected"
+protected_modules = ["haatly.identity.domain", "haatly.identity.app", "haatly.identity.adapters"]
+allowed_importers = ["haatly.identity"]
+as_packages = true
+
+[[tool.importlinter.contracts]]
+name = "stores layers"
+type = "layers"
+layers = ["haatly.stores.public", "haatly.stores.adapters", "haatly.stores.app", "haatly.stores.domain"]
+
+[[tool.importlinter.contracts]]
+name = "stores internals are reachable only through stores.public"
+type = "protected"
+protected_modules = ["haatly.stores.domain", "haatly.stores.app", "haatly.stores.adapters"]
+allowed_importers = ["haatly.stores"]
+as_packages = true
+
+[[tool.importlinter.contracts]]
+name = "membership layers"
+type = "layers"
+layers = ["haatly.membership.public", "haatly.membership.adapters", "haatly.membership.app", "haatly.membership.domain"]
+
+[[tool.importlinter.contracts]]
+name = "membership internals are reachable only through membership.public"
+type = "protected"
+protected_modules = ["haatly.membership.domain", "haatly.membership.app", "haatly.membership.adapters"]
+allowed_importers = ["haatly.membership"]
+as_packages = true
+
+[[tool.importlinter.contracts]]
 name = "module dependency order"
 type = "layers"
-layers = ["haatly.main | haatly.worker", "haatly.ledger", "haatly.platform"]
+layers = [
+    "haatly.main | haatly.worker",
+    "haatly.membership",
+    "haatly.stores",
+    "haatly.identity | haatly.ledger",
+    "haatly.platform",
+]
 
 [[tool.importlinter.contracts]]
 name = "app layers reach other modules only through their pure kernels"
 type = "forbidden"
 source_modules = ["haatly.*.app"]
-forbidden_modules = ["haatly.platform.public", "haatly.ledger.public"]
+forbidden_modules = [
+    "haatly.platform.public",
+    "haatly.ledger.public",
+    "haatly.identity.public",
+    "haatly.stores.public",
+    "haatly.membership.public",
+]
 
 [[tool.importlinter.contracts]]
 name = "platform kernel does no I/O"

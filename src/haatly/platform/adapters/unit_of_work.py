@@ -5,6 +5,7 @@ from typing import Self
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine, AsyncTransaction
 
+from haatly.platform.adapters.sql_audit import SqlAuditRepository, SqlRateLimitRepository
 from haatly.platform.adapters.sql_idempotency import SqlIdempotencyRepository
 from haatly.platform.adapters.sql_jobs import SqlJobRepository
 from haatly.platform.adapters.sql_outbox import SqlOutboxRepository, SqlProcessedEventRepository
@@ -79,6 +80,14 @@ class SqlUnitOfWork:
     @property
     def idempotency(self) -> SqlIdempotencyRepository:
         return self.current.idempotency
+
+    @property
+    def audit(self) -> SqlAuditRepository:
+        return SqlAuditRepository(self.connection)
+
+    @property
+    def rate_limits(self) -> SqlRateLimitRepository:
+        return SqlRateLimitRepository(self.connection)
 
     async def __aenter__(self) -> Self:
         self._open = await open_transaction(self.engine, self.context)

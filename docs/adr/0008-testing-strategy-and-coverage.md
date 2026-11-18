@@ -34,6 +34,9 @@ v1 claimed 98% branch coverage while checkout, webhooks and refunds had no tests
 - 90% branch coverage overall, enforced by `fail_under`.
 - 100% branch coverage on `inventory`, `ordering/domain`, `payments`, `ledger` and `payouts`,
   enforced per package by a check added with the first of those modules (M1).
+- Coverage runs with `concurrency = ["greenlet", "thread"]`. SQLAlchemy's asyncio layer
+  switches greenlets, and without that setting coverage.py lost its tracer partway through use
+  cases and under-reported them by up to 40 points (M2).
 - **No coverage exclusions on adapters.** The Razorpay and TigerBeetle adapters are covered by
   recorded-fixture tests and contract tests.
 - Exclusions exist only in `pyproject.toml` (`if TYPE_CHECKING:` and protocol `...` bodies). Source

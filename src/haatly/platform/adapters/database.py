@@ -1,6 +1,7 @@
 from enum import StrEnum
 
 from sqlalchemy import URL, MetaData
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 
 from haatly.platform.adapters.settings import Settings
@@ -49,3 +50,13 @@ def plain_dsn(url: URL) -> str:
 
 def create_engine(url: URL, pool_size: int = 10) -> AsyncEngine:
     return create_async_engine(url, pool_size=pool_size, pool_pre_ping=True)
+
+
+UNIQUE_VIOLATION = "23505"
+
+
+def is_unique_violation(error: IntegrityError, constraint: str | None = None) -> bool:
+    if getattr(error.orig, "sqlstate", None) != UNIQUE_VIOLATION:
+        return False
+    cause = getattr(error.orig, "__cause__", None)
+    return constraint is None or getattr(cause, "constraint_name", None) == constraint

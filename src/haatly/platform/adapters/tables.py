@@ -99,3 +99,27 @@ idempotency_keys = Table(
         name="response_only_when_completed",
     ),
 )
+
+audit_log = Table(
+    "audit_log",
+    metadata,
+    Column("id", UUID(as_uuid=True), primary_key=True),
+    timestamp("occurred_at"),
+    Column("actor_role", Text, nullable=False),
+    Column("actor_user_id", UUID(as_uuid=True), nullable=True),
+    Column("action", Text, nullable=False),
+    Column("subject_type", Text, nullable=False),
+    Column("subject_id", UUID(as_uuid=True), nullable=False),
+    Column("details", JSONB, nullable=False),
+    Index("ix_audit_log_subject", "subject_type", "subject_id"),
+)
+
+rate_limit_counters = Table(
+    "rate_limit_counters",
+    metadata,
+    Column("key", Text, nullable=False),
+    timestamp("window_start"),
+    Column("count", Integer, nullable=False),
+    PrimaryKeyConstraint("key", "window_start"),
+    CheckConstraint("count > 0", name="count_positive"),
+)

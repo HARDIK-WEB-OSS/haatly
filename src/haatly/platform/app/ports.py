@@ -5,6 +5,7 @@ from types import TracebackType
 from typing import Protocol, Self
 from uuid import UUID
 
+from haatly.platform.domain.audit import AuditEntry
 from haatly.platform.domain.events import OutboxEvent
 from haatly.platform.domain.idempotency import StoredRequest, StoredResponse
 from haatly.platform.domain.jobs import Job, NewJob
@@ -68,7 +69,18 @@ class IdempotencyRepository(Protocol):
     async def abandon(self, scope: str, key: str) -> None: ...
 
 
+class AuditRepository(Protocol):
+    async def append(self, entry: AuditEntry) -> None: ...
+
+
+class RateLimitRepository(Protocol):
+    async def hit(self, key: str, window_start: datetime) -> int: ...
+
+
 class UnitOfWork(Protocol):
+    @property
+    def context(self) -> TenantContext: ...
+
     @property
     def jobs(self) -> JobRepository: ...
 
@@ -80,6 +92,12 @@ class UnitOfWork(Protocol):
 
     @property
     def idempotency(self) -> IdempotencyRepository: ...
+
+    @property
+    def audit(self) -> AuditRepository: ...
+
+    @property
+    def rate_limits(self) -> RateLimitRepository: ...
 
     async def __aenter__(self) -> Self: ...
 

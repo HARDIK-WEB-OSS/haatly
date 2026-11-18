@@ -44,8 +44,10 @@ marker, so it could not be installed on Windows at all (audit F-15). v1 also had
 
 ### Workflow
 
-- One branch per milestone (`m0-skeleton`, `m1-tigerbeetle`, …) and a pull request to `main`.
-  Nothing is pushed to `main` directly.
+- Work is committed on a local `main`. There are no milestone branches and no pull requests.
+- The project owner does every remote git operation: pushing `main` and reading CI. When a
+  milestone is committed and green locally it is handed over as "ready to push", and a red CI run
+  is fixed locally and handed over again.
 - Conventional Commits, one logical change per commit. Every check is green before each commit.
 - **Money-path tests come first.** The failing run (the red output) is recorded in the milestone
   report. The test and its implementation are then committed together, so every commit stays green.

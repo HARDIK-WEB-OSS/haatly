@@ -1,0 +1,63 @@
+from collections.abc import Mapping, Sequence
+from datetime import datetime
+from typing import Protocol, Self
+from uuid import UUID
+
+from haatly.identity.domain.model import Session, User
+from haatly.platform.kernel import TenantContext, UnitOfWork
+
+
+class EmailTakenError(Exception):
+    pass
+
+
+class PasswordHasher(Protocol):
+    async def hash(self, password: str) -> str: ...
+
+    async def verify(self, password_hash: str, password: str) -> bool: ...
+
+    def needs_rehash(self, password_hash: str) -> bool: ...
+
+    async def burn(self, password: str) -> None: ...
+
+
+class TokenSource(Protocol):
+    def new_token(self) -> str: ...
+
+
+class UserRepository(Protocol):
+    async def add(self, user: User) -> None: ...
+
+    async def get(self, user_id: UUID) -> User | None: ...
+
+    async def by_email(self, email: str) -> User | None: ...
+
+    async def set_password_hash(self, user_id: UUID, password_hash: str, now: datetime) -> None: ...
+
+    async def emails(self, user_ids: Sequence[UUID]) -> Mapping[UUID, str]: ...
+
+
+class SessionRepository(Protocol):
+    async def add(self, session: Session) -> None: ...
+
+    async def by_token_hash(self, token_hash: str) -> Session | None: ...
+
+    async def touch(self, session_id: UUID, now: datetime) -> None: ...
+
+    async def delete(self, token_hash: str) -> None: ...
+
+    async def delete_for_user(self, user_id: UUID) -> None: ...
+
+
+class IdentityUnitOfWork(UnitOfWork, Protocol):
+    @property
+    def users(self) -> UserRepository: ...
+
+    @property
+    def sessions(self) -> SessionRepository: ...
+
+    async def __aenter__(self) -> Self: ...
+
+
+class IdentityUnitOfWorkFactory(Protocol):
+    def __call__(self, context: TenantContext) -> IdentityUnitOfWork: ...

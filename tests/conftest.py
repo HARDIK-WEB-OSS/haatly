@@ -1,16 +1,20 @@
 from collections.abc import AsyncIterator, Iterator
 from pathlib import Path
 
+import httpx
 import pytest
 from alembic import command
 from alembic.config import Config
 from pydantic import SecretStr
 from sqlalchemy import text
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncEngine
 from testcontainers.core.container import DockerContainer
 from testcontainers.core.wait_strategies import ExecWaitStrategy, LogMessageWaitStrategy
 
+from haatly.identity.public import Argon2idHasher
 from haatly.ledger.public import LedgerSettings
+from haatly.main import create_app
 from haatly.platform.public import (
     DbRole,
     Environment,
@@ -19,6 +23,7 @@ from haatly.platform.public import (
     create_engine,
     database_url,
 )
+from tests.world import PASSWORD, Api, Seeder
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 POSTGRES_IMAGE = "postgis/postgis:16-3.5"
@@ -44,6 +49,13 @@ TRUNCATED_TABLES = (
     "ledger.accounts",
     "ledger.drift",
     "ledger.cursors",
+    "membership.invitations",
+    "membership.memberships",
+    "stores.stores",
+    "identity.sessions",
+    "identity.users",
+    "platform.audit_log",
+    "platform.rate_limit_counters",
 )
 
 
@@ -94,20 +106,57 @@ def migrated(settings: Settings) -> Settings:
     return settings
 
 
-@pytest.fixture
-async def owner_engine(migrated: Settings) -> AsyncIterator[AsyncEngine]:
-    engine = create_engine(database_url(migrated, DbRole.OWNER), pool_size=2)
-    yield engine
-    await engine.dispose()
+LOCK_HOLDERS = text(
+    "SELECT usename, state, left(query, 120) FROM pg_stat_activity "
+    "WHERE datname = current_database() AND pid <> pg_backend_pid() AND state <> 'idle'"
+)
+
+
+class TruncationBlockedError(AssertionError):
+    pass
+
+
+async def truncate_everything(settings: Settings) -> None:
+    engine = create_engine(database_url(settings, DbRole.OWNER), pool_size=2)
+    try:
+        async with engine.begin() as connection:
+            await connection.execute(text("SET LOCAL lock_timeout = '5s'"))
+            await connection.execute(text(f"TRUNCATE {', '.join(TRUNCATED_TABLES)}"))
+    except DBAPIError as error:
+        async with engine.connect() as connection:
+            holders = (await connection.execute(LOCK_HOLDERS)).all()
+        raise TruncationBlockedError(f"sessions left open by the test: {holders}") from error
+    finally:
+        await engine.dispose()
 
 
 @pytest.fixture
-async def app_engine(migrated: Settings, owner_engine: AsyncEngine) -> AsyncIterator[AsyncEngine]:
+async def app_engine(migrated: Settings) -> AsyncIterator[AsyncEngine]:
     engine = create_engine(database_url(migrated, DbRole.APP), pool_size=20)
     yield engine
     await engine.dispose()
-    async with owner_engine.begin() as connection:
-        await connection.execute(text(f"TRUNCATE {', '.join(TRUNCATED_TABLES)}"))
+    await truncate_everything(migrated)
+
+
+@pytest.fixture(scope="session")
+def password_hash() -> str:
+    return Argon2idHasher().hasher.hash(PASSWORD)
+
+
+@pytest.fixture
+def seeder(app_engine: AsyncEngine, password_hash: str) -> Seeder:
+    return Seeder(app_engine, password_hash)
+
+
+@pytest.fixture
+async def api(migrated: Settings, app_engine: AsyncEngine) -> AsyncIterator[Api]:
+    app = create_app(migrated)
+    transport = httpx.ASGITransport(app=app, raise_app_exceptions=False)
+    try:
+        async with httpx.AsyncClient(transport=transport, base_url="https://testserver") as client:
+            yield Api(client, migrated.public_origin, app)
+    finally:
+        await app.state.engine.dispose()
 
 
 @pytest.fixture
