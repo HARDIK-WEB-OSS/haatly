@@ -13,3 +13,5 @@ htmlcov/
 dist/
 *.egg-info/
 .tigerbeetle/
+coverage.xml
+.hypothesis/
