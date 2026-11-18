@@ -13,3 +13,6 @@ htmlcov/
 dist/
 *.egg-info/
 .tigerbeetle/
+coverage.xml
+coverage.json
+.hypothesis/

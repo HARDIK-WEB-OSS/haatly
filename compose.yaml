@@ -1,0 +1,101 @@
+name: haatly
+
+x-app-environment: &app-environment
+  HAATLY_ENVIRONMENT: ${HAATLY_ENVIRONMENT:-development}
+  HAATLY_DB_HOST: postgres
+  HAATLY_DB_PORT: "5432"
+  HAATLY_DB_NAME: haatly
+  HAATLY_DB_OWNER_PASSWORD: ${HAATLY_DB_OWNER_PASSWORD:?set HAATLY_DB_OWNER_PASSWORD in .env}
+  HAATLY_DB_APP_PASSWORD: ${HAATLY_DB_APP_PASSWORD:?set HAATLY_DB_APP_PASSWORD in .env}
+  HAATLY_PUBLIC_ORIGIN: ${HAATLY_PUBLIC_ORIGIN:-https://localhost:8443}
+  HAATLY_TIGERBEETLE_ADDRESSES: tigerbeetle:3000
+
+services:
+  postgres:
+    image: postgis/postgis:16-3.5
+    restart: unless-stopped
+    command: ["postgres", "-c", "timezone=UTC", "-c", "log_line_prefix=%m [%p] %u@%d "]
+    environment:
+      POSTGRES_DB: haatly
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_SUPERUSER_PASSWORD:?set POSTGRES_SUPERUSER_PASSWORD in .env}
+      HAATLY_DB_OWNER_PASSWORD: ${HAATLY_DB_OWNER_PASSWORD:?set HAATLY_DB_OWNER_PASSWORD in .env}
+      HAATLY_DB_APP_PASSWORD: ${HAATLY_DB_APP_PASSWORD:?set HAATLY_DB_APP_PASSWORD in .env}
+      HAATLY_DB_OPS_PASSWORD: ${HAATLY_DB_OPS_PASSWORD:?set HAATLY_DB_OPS_PASSWORD in .env}
+    ports:
+      - "127.0.0.1:55432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./docker/postgres/initdb/01-roles.sql:/docker-entrypoint-initdb.d/20-haatly-roles.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d haatly"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+
+  tigerbeetle:
+    image: ghcr.io/tigerbeetle/tigerbeetle:0.17.9
+    restart: unless-stopped
+    security_opt:
+      - seccomp:unconfined
+    entrypoint: ["/bin/sh", "/opt/haatly/start-tigerbeetle.sh"]
+    ports:
+      - "127.0.0.1:13000:3000"
+    volumes:
+      - tigerbeetle-data:/data
+      - ./docker/tigerbeetle/start-tigerbeetle.sh:/opt/haatly/start-tigerbeetle.sh:ro
+
+  caddy:
+    image: caddy:2.10-alpine
+    restart: unless-stopped
+    environment:
+      API_UPSTREAM: ${API_UPSTREAM:-host.docker.internal:8000}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "127.0.0.1:8443:443"
+    volumes:
+      - ./docker/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+
+  migrate:
+    profiles: ["app"]
+    build: .
+    image: haatly:dev
+    command: ["alembic", "upgrade", "head"]
+    environment: *app-environment
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  api:
+    profiles: ["app"]
+    image: haatly:dev
+    command: ["uvicorn", "--factory", "haatly.main:create_app", "--host", "0.0.0.0", "--port", "8000"]
+    environment: *app-environment
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/ready')"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+
+  worker:
+    profiles: ["app"]
+    image: haatly:dev
+    command: ["haatly-worker"]
+    security_opt:
+      - seccomp:unconfined
+    environment: *app-environment
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      tigerbeetle:
+        condition: service_started
+
+volumes:
+  postgres-data:
+  tigerbeetle-data:
+  caddy-data:

@@ -1,0 +1,81 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  UV_VERSION: "0.13.9"
+  GITLEAKS_VERSION: "8.28.0"
+
+jobs:
+  checks:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@v7
+        with:
+          version: ${{ env.UV_VERSION }}
+          python-version: "3.12"
+      - name: Install locked dependencies
+        run: uv sync --locked
+      - name: Generate throwaway secrets
+        run: ./tasks.ps1 env
+      - name: Lint (comments, ruff, ruff format, import-linter)
+        run: ./tasks.ps1 lint
+      - name: Typecheck (mypy --strict)
+        run: ./tasks.ps1 typecheck
+      - name: Start Postgres
+        run: docker compose up --detach --wait postgres
+      - name: Migrations upgrade, downgrade, upgrade, alembic check
+        run: ./tasks.ps1 migrate-roundtrip
+      - name: Require io_uring for the TigerBeetle client
+        run: |
+          $setting = '/proc/sys/kernel/io_uring_disabled'
+          $value = if (Test-Path $setting) { (Get-Content $setting).Trim() } else { 'absent' }
+          Write-Host "kernel $(uname -r), io_uring_disabled=$value"
+          if ($value -notin @('0', 'absent')) { throw "io_uring is disabled on this runner ($value)" }
+      - name: Tests with coverage
+        run: ./tasks.ps1 test
+      - name: Dependency audit (pip-audit)
+        run: uv run --locked pip-audit --skip-editable
+      - name: Secret scan (gitleaks)
+        run: |
+          $archive = "gitleaks_$($env:GITLEAKS_VERSION)_linux_x64.tar.gz"
+          Invoke-WebRequest -Uri "https://github.com/gitleaks/gitleaks/releases/download/v$($env:GITLEAKS_VERSION)/$archive" -OutFile $archive
+          tar -xzf $archive gitleaks
+          ./gitleaks git --redact --no-banner --exit-code 1 .
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+  smoke:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v5
+      - name: Generate throwaway secrets
+        run: ./tasks.ps1 env
+      - name: Build the image and boot the compose stack
+        run: ./tasks.ps1 smoke
+      - name: Show logs on failure
+        if: failure()
+        run: docker compose --profile app logs --tail 200
+      - name: Tear down
+        if: always()
+        run: docker compose --profile app down --volumes

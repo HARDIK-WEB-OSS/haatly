@@ -1,0 +1,151 @@
+[project]
+name = "haatly"
+version = "0.1.0"
+description = "Private seller-led commerce for local sellers"
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "fastapi>=0.120",
+    "uvicorn[standard]>=0.38",
+    "sqlalchemy[asyncio]>=2.0.44,<2.1",
+    "asyncpg>=0.30",
+    "pydantic>=2.12",
+    "pydantic-settings>=2.11",
+    "alembic>=1.17",
+    "tigerbeetle==0.17.9",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.4",
+    "pytest-cov>=7.0",
+    "hypothesis>=6.140",
+    "testcontainers>=4.13",
+    "httpx>=0.28",
+    "ruff>=0.14",
+    "mypy>=1.18",
+    "import-linter>=2.5",
+    "pip-audit>=2.9",
+    "pre-commit>=4.3",
+]
+
+[project.scripts]
+haatly-worker = "haatly.worker:main"
+
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/haatly"]
+
+[tool.uv]
+default-groups = ["dev"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["src", "tests", "tools", "migrations"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM", "ASYNC", "S", "RUF", "PL", "PT", "C90", "DTZ", "PERF", "PIE", "RET", "TRY", "BLE"]
+ignore = ["PLR2004", "TRY003"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101", "S105", "S106", "S311", "PLR0913", "PLR0917"]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 8
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+mypy_path = "src:tools"
+files = ["src", "tests", "tools", "migrations"]
+explicit_package_bases = true
+plugins = ["pydantic.mypy"]
+
+[[tool.mypy.overrides]]
+module = ["asyncpg", "asyncpg.*", "testcontainers.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["tools"]
+addopts = ["--strict-markers", "--strict-config", "-p", "no:cacheprovider"]
+xfail_strict = true
+filterwarnings = ["error"]
+
+[tool.coverage.run]
+source = ["haatly"]
+branch = true
+
+[tool.coverage.report]
+fail_under = 90
+show_missing = true
+skip_covered = true
+exclude_also = [
+    "if TYPE_CHECKING:",
+    "^\\s*\\.\\.\\.$",
+]
+
+[tool.alembic]
+script_location = "%(here)s/migrations"
+file_template = "%%(rev)s_%%(slug)s"
+
+[tool.importlinter]
+root_package = "haatly"
+include_external_packages = true
+
+[[tool.importlinter.contracts]]
+name = "platform layers"
+type = "layers"
+layers = ["haatly.platform.public", "haatly.platform.adapters", "haatly.platform.app", "haatly.platform.domain"]
+
+[[tool.importlinter.contracts]]
+name = "platform internals are reachable only through platform.public"
+type = "protected"
+protected_modules = ["haatly.platform.domain", "haatly.platform.app", "haatly.platform.adapters"]
+allowed_importers = ["haatly.platform"]
+as_packages = true
+
+[[tool.importlinter.contracts]]
+name = "ledger layers"
+type = "layers"
+layers = ["haatly.ledger.public", "haatly.ledger.adapters", "haatly.ledger.app", "haatly.ledger.domain"]
+
+[[tool.importlinter.contracts]]
+name = "ledger internals are reachable only through ledger.public"
+type = "protected"
+protected_modules = ["haatly.ledger.domain", "haatly.ledger.app", "haatly.ledger.adapters"]
+allowed_importers = ["haatly.ledger"]
+as_packages = true
+
+[[tool.importlinter.contracts]]
+name = "module dependency order"
+type = "layers"
+layers = ["haatly.main | haatly.worker", "haatly.ledger", "haatly.platform"]
+
+[[tool.importlinter.contracts]]
+name = "app layers reach other modules only through their pure kernels"
+type = "forbidden"
+source_modules = ["haatly.*.app"]
+forbidden_modules = ["haatly.platform.public", "haatly.ledger.public"]
+
+[[tool.importlinter.contracts]]
+name = "platform kernel does no I/O"
+type = "forbidden"
+source_modules = ["haatly.platform.kernel"]
+forbidden_modules = ["sqlalchemy", "asyncpg", "httpx", "tigerbeetle"]
+
+[[tool.importlinter.contracts]]
+name = "domain is pure"
+type = "forbidden"
+source_modules = ["haatly.*.domain"]
+forbidden_modules = ["sqlalchemy", "asyncpg", "fastapi", "starlette", "httpx", "pydantic_settings", "uvicorn", "alembic", "tigerbeetle"]
+
+[[tool.importlinter.contracts]]
+name = "app layer does no I/O of its own"
+type = "forbidden"
+source_modules = ["haatly.*.app"]
+forbidden_modules = ["sqlalchemy", "asyncpg", "fastapi", "starlette", "httpx", "pydantic_settings", "uvicorn", "alembic", "tigerbeetle"]
