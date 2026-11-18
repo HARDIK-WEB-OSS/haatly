@@ -28,7 +28,7 @@ services:
       - postgres-data:/var/lib/postgresql/data
       - ./docker/postgres/initdb/01-roles.sql:/docker-entrypoint-initdb.d/20-haatly-roles.sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d haatly"]
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U postgres -d haatly"]
       interval: 2s
       timeout: 5s
       retries: 30
