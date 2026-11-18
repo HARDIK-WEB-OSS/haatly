@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
     [Parameter(Position = 0)]
-    [ValidateSet('setup', 'env', 'up', 'down', 'migrate', 'migrate-roundtrip', 'test', 'lint', 'typecheck', 'audit', 'check', 'run-api', 'run-worker', 'hooks')]
+    [ValidateSet('setup', 'env', 'up', 'down', 'migrate', 'migrate-roundtrip', 'test', 'lint', 'typecheck', 'audit', 'check', 'run-api', 'run-worker', 'smoke', 'hooks')]
     [string]$Task = 'check',
     [Parameter(ValueFromRemainingArguments = $true)]
     [string[]]$Rest = @()
@@ -118,6 +118,17 @@ function Invoke-RunWorker {
     Invoke-Uv @('haatly-worker')
 }
 
+function Invoke-Smoke {
+    $env:API_UPSTREAM = 'api:8000'
+    try {
+        Invoke-Native 'docker' @('compose', '--profile', 'app', 'up', '--detach', '--build', '--wait')
+        $response = Invoke-WebRequest -Uri 'https://localhost:8443/ready' -SkipCertificateCheck -UseBasicParsing
+        Write-Host "Smoke: GET https://localhost:8443/ready -> $($response.StatusCode) $($response.Content)"
+    } finally {
+        Remove-Item Env:API_UPSTREAM
+    }
+}
+
 switch ($Task) {
     'setup' { Invoke-Setup }
     'env' { Initialize-EnvFile }
@@ -132,5 +143,6 @@ switch ($Task) {
     'check' { Invoke-Check }
     'run-api' { Invoke-RunApi }
     'run-worker' { Invoke-RunWorker }
+    'smoke' { Invoke-Smoke }
     'hooks' { Invoke-Hooks }
 }

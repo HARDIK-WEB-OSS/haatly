@@ -1,5 +1,14 @@
 name: haatly
 
+x-app-environment: &app-environment
+  HAATLY_ENVIRONMENT: ${HAATLY_ENVIRONMENT:-development}
+  HAATLY_DB_HOST: postgres
+  HAATLY_DB_PORT: "5432"
+  HAATLY_DB_NAME: haatly
+  HAATLY_DB_OWNER_PASSWORD: ${HAATLY_DB_OWNER_PASSWORD:?set HAATLY_DB_OWNER_PASSWORD in .env}
+  HAATLY_DB_APP_PASSWORD: ${HAATLY_DB_APP_PASSWORD:?set HAATLY_DB_APP_PASSWORD in .env}
+  HAATLY_PUBLIC_ORIGIN: ${HAATLY_PUBLIC_ORIGIN:-https://localhost:8443}
+
 services:
   postgres:
     image: postgis/postgis:16-3.5
@@ -47,6 +56,39 @@ services:
     volumes:
       - ./docker/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy-data:/data
+
+  migrate:
+    profiles: ["app"]
+    build: .
+    image: haatly:dev
+    command: ["alembic", "upgrade", "head"]
+    environment: *app-environment
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  api:
+    profiles: ["app"]
+    image: haatly:dev
+    command: ["uvicorn", "--factory", "haatly.main:create_app", "--host", "0.0.0.0", "--port", "8000"]
+    environment: *app-environment
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/ready')"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+
+  worker:
+    profiles: ["app"]
+    image: haatly:dev
+    command: ["haatly-worker"]
+    environment: *app-environment
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
 
 volumes:
   postgres-data:
