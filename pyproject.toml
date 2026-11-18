@@ -28,6 +28,9 @@ dev = [
     "pre-commit>=4.3",
 ]
 
+[project.scripts]
+haatly-worker = "haatly.worker:main"
+
 [build-system]
 requires = ["hatchling>=1.27"]
 build-backend = "hatchling.build"
@@ -57,7 +60,7 @@ max-complexity = 8
 python_version = "3.12"
 strict = true
 mypy_path = "src:tools"
-files = ["src", "tests", "tools"]
+files = ["src", "tests", "tools", "migrations"]
 explicit_package_bases = true
 plugins = ["pydantic.mypy"]
 
@@ -84,3 +87,35 @@ exclude_also = [
     "if TYPE_CHECKING:",
     "^\\s*\\.\\.\\.$",
 ]
+
+[tool.alembic]
+script_location = "%(here)s/migrations"
+file_template = "%%(rev)s_%%(slug)s"
+
+[tool.importlinter]
+root_package = "haatly"
+include_external_packages = true
+
+[[tool.importlinter.contracts]]
+name = "platform layers"
+type = "layers"
+layers = ["haatly.platform.public", "haatly.platform.adapters", "haatly.platform.app", "haatly.platform.domain"]
+
+[[tool.importlinter.contracts]]
+name = "platform internals are reachable only through platform.public"
+type = "protected"
+protected_modules = ["haatly.platform.domain", "haatly.platform.app", "haatly.platform.adapters"]
+allowed_importers = ["haatly.platform"]
+as_packages = true
+
+[[tool.importlinter.contracts]]
+name = "domain is pure"
+type = "forbidden"
+source_modules = ["haatly.*.domain"]
+forbidden_modules = ["sqlalchemy", "asyncpg", "fastapi", "starlette", "httpx", "pydantic_settings", "uvicorn", "alembic"]
+
+[[tool.importlinter.contracts]]
+name = "app layer does no I/O of its own"
+type = "forbidden"
+source_modules = ["haatly.*.app"]
+forbidden_modules = ["sqlalchemy", "asyncpg", "fastapi", "starlette", "httpx", "pydantic_settings", "uvicorn", "alembic"]
