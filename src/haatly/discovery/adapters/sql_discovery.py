@@ -34,21 +34,38 @@ PRODUCTS_NEAR = text("""
 WITH origin AS (
     SELECT ST_SetSRID(ST_MakePoint(:longitude, :latitude), 4326)::geography AS point
 ),
-nearby AS (
+nearby AS MATERIALIZED (
     SELECT d.id AS store_id, d.name AS store_name, ST_Distance(l.location, origin.point) AS meters
     FROM discovery.store_locations AS l
     JOIN stores.directory AS d ON d.id = l.store_id
     CROSS JOIN origin
     WHERE ST_DWithin(l.location, origin.point, :radius)
 ),
+candidates AS MATERIALIZED (
+    SELECT candidate AS product_id
+    FROM catalog.search_candidates(
+        :text,
+        ARRAY(SELECT store_id FROM nearby ORDER BY store_id),
+        ARRAY(SELECT meters FROM nearby ORDER BY store_id),
+        :limit
+    ) AS candidate
+),
 wanted AS (SELECT websearch_to_tsquery('simple', :text) AS query)
 SELECT p.product_id, p.store_id, n.store_name, p.title, n.meters,
     (SELECT min(v.price_paise) FROM catalog.storefront_variants AS v
      WHERE v.product_id = p.product_id) AS price_from
-FROM catalog.storefront_products AS p
-JOIN nearby AS n ON n.store_id = p.store_id
+FROM candidates AS c
+CROSS JOIN LATERAL (
+    SELECT shown.product_id, shown.store_id, shown.title, shown.search
+    FROM catalog.storefront_products AS shown
+    WHERE shown.product_id = c.product_id
+    LIMIT 1
+) AS p
+CROSS JOIN LATERAL (
+    SELECT near.store_name, near.meters FROM nearby AS near WHERE near.store_id = p.store_id
+    LIMIT 1
+) AS n
 CROSS JOIN wanted
-WHERE p.search @@ wanted.query OR :text <% p.title
 ORDER BY ts_rank(p.search, wanted.query) + word_similarity(:text, p.title) DESC, n.meters,
     p.product_id
 LIMIT :limit

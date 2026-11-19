@@ -2,14 +2,17 @@ import json
 import math
 import secrets
 import time
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from functools import partial
 from pathlib import Path
 
 import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 
+from haatly.platform.public import DbRole, Settings, create_engine, database_url
 from tests.world import Actor, Api, Seeder
 
 pytestmark = pytest.mark.anyio
@@ -87,7 +90,7 @@ SEED_STATEMENTS = (
     FROM generate_series(1, :stores, 10) AS g
     """,
 )
-SEARCHES = (
+MIXED_SEARCHES = (
     "silk saree",
     "kanjeevaram",
     "kanjivaram",
@@ -99,6 +102,12 @@ SEARCHES = (
     "maroon lehenga",
     "khadi stole",
 )
+QUERY_SETS = {
+    "every product": ("handwoven",),
+    "a tenth of products": ("saree",),
+    "under 1% of products": ("pashmeena shawl",),
+    "mixed, with misspellings": MIXED_SEARCHES,
+}
 ORIGINS = (
     "pin_code=560001",
     "latitude=12.93&longitude=77.62",
@@ -109,6 +118,20 @@ RADII = (5, 10, 25)
 
 async def as_system(connection: AsyncConnection) -> None:
     await connection.execute(text("SELECT set_config('app.role', 'system', true)"))
+
+
+async def analyze(settings: Settings) -> None:
+    owner = create_engine(database_url(settings, DbRole.OWNER), pool_size=1)
+    try:
+        async with owner.connect() as connection:
+            await connection.execute(text("ANALYZE"))
+    finally:
+        await owner.dispose()
+
+
+@pytest.fixture
+def analyzer(migrated: Settings) -> Callable[[], Awaitable[None]]:
+    return partial(analyze, migrated)
 
 
 async def seed(engine: AsyncEngine, password_hash: str, member: Actor) -> int:
@@ -125,11 +148,27 @@ async def seed(engine: AsyncEngine, password_hash: str, member: Actor) -> int:
         await as_system(connection)
         for statement in SEED_STATEMENTS:
             await connection.execute(text(statement), parameters)
-        await connection.execute(text("ANALYZE"))
     async with engine.begin() as connection:
         await as_system(connection)
         counted = text("SELECT count(*) FROM catalog.products")
         return int((await connection.execute(counted)).scalar_one())
+
+
+async def matching(engine: AsyncEngine) -> dict[str, int]:
+    counted = text(
+        "SELECT count(*) FROM catalog.products "
+        "WHERE search @@ websearch_to_tsquery('simple', :q) OR :q <% title"
+    )
+    found = {}
+    async with engine.begin() as connection:
+        await as_system(connection)
+        await connection.execute(
+            text("SELECT set_config('pg_trgm.word_similarity_threshold', '0.5', true)")
+        )
+        for searches in QUERY_SETS.values():
+            for wanted in searches:
+                found[wanted] = int((await connection.execute(counted, {"q": wanted})).scalar_one())
+    return found
 
 
 @dataclass(frozen=True)
@@ -154,22 +193,24 @@ class Timing:
         }
 
 
-def paths(endpoint: str) -> list[str]:
+def paths(endpoint: str, searches: tuple[str, ...]) -> list[str]:
     built = []
     for index in range(WARM_UP + REQUESTS_PER_ENDPOINT):
         origin = ORIGINS[index % len(ORIGINS)]
         radius = RADII[(index // len(ORIGINS)) % len(RADII)]
         query = f"{origin}&radius_km={radius}"
-        if endpoint == "products":
-            query = f"q={SEARCHES[index % len(SEARCHES)]}&{query}"
+        if searches:
+            query = f"q={searches[index % len(searches)]}&{query}"
         built.append(f"/discover/{endpoint}?{query}")
     return built
 
 
-async def measure(api: Api, name: str, endpoint: str, token: str | None) -> Timing:
+async def measure(
+    api: Api, name: str, endpoint: str, token: str | None, searches: tuple[str, ...] = ()
+) -> Timing:
     millis = []
     results = 0
-    for index, path in enumerate(paths(endpoint)):
+    for index, path in enumerate(paths(endpoint, searches)):
         started = time.perf_counter()
         response = await api.call("GET", path, token=token)
         elapsed = (time.perf_counter() - started) * 1000
@@ -181,19 +222,25 @@ async def measure(api: Api, name: str, endpoint: str, token: str | None) -> Timi
 
 
 async def test_discovery_p95_over_ten_thousand_products(
-    api: Api, app_engine: AsyncEngine, seeder: Seeder, password_hash: str
+    api: Api,
+    app_engine: AsyncEngine,
+    seeder: Seeder,
+    password_hash: str,
+    analyzer: Callable[[], Awaitable[None]],
 ) -> None:
     member = await seeder.user("regular")
     assert member.token is not None
     assert await seed(app_engine, password_hash, member) == SEEDED_PRODUCTS
-    timings = [
-        await measure(api, "stores, anonymous", "stores", None),
-        await measure(api, "products, anonymous", "products", None),
-        await measure(api, "products, member of 20 stores", "products", member.token),
-    ]
+    await analyzer()
+    timings = [await measure(api, "stores, anonymous", "stores", None)]
+    for label, searches in QUERY_SETS.items():
+        for viewer, token in (("anonymous", None), ("member of 20 stores", member.token)):
+            name = f"products, {label}, {viewer}"
+            timings.append(await measure(api, name, "products", token, searches))
     report = {
         "seeded_products": SEEDED_PRODUCTS,
         "seeded_stores": STORES,
+        "matching_products": await matching(app_engine),
         "budget_p95_ms": P95_BUDGET_MS,
         "timings": [timing.summary() for timing in timings],
     }

@@ -58,6 +58,33 @@ products = Table(
     ),
 )
 
+product_search = Table(
+    "product_search",
+    metadata,
+    Column("product_id", UUID(as_uuid=True), primary_key=True),
+    Column("store_id", UUID(as_uuid=True), nullable=False),
+    Column("status", Text, nullable=False),
+    Column("visibility", Text, nullable=False),
+    Column("title", Text, nullable=False),
+    Column("search", TSVECTOR, nullable=False),
+    ForeignKeyConstraint(
+        ["store_id", "product_id"], [products.c.store_id, products.c.id], ondelete="CASCADE"
+    ),
+    Index(
+        "ix_product_search_search",
+        "search",
+        postgresql_using="gin",
+        postgresql_with={"fastupdate": "off"},
+    ),
+    Index(
+        "ix_product_search_title_trgm",
+        "title",
+        postgresql_using="gin",
+        postgresql_ops={"title": "gin_trgm_ops"},
+        postgresql_with={"fastupdate": "off"},
+    ),
+)
+
 variants = Table(
     "variants",
     metadata,

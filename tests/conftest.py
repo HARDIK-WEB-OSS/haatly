@@ -42,6 +42,7 @@ TRUNCATED_TABLES = (
     "discovery.store_locations",
     "discovery.pin_codes",
     "discovery.pin_imports",
+    "catalog.product_search",
     "catalog.variant_prices",
     "catalog.variants",
     "catalog.products",
