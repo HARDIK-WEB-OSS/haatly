@@ -49,7 +49,9 @@ target-version = "py312"
 src = ["src", "tests", "tools", "migrations"]
 
 [tool.ruff.lint]
-select = ["E", "F", "W", "I", "UP", "B", "SIM", "ASYNC", "S", "RUF", "PL", "PT", "C90", "DTZ", "PERF", "PIE", "RET", "TRY", "BLE"]
+preview = true
+explicit-preview-rules = true
+select = ["E", "F", "W", "I", "UP", "B", "SIM", "ASYNC", "S", "RUF", "PL", "PT", "C90", "DTZ", "PERF", "PIE", "RET", "TRY", "BLE", "PLW1514"]
 ignore = ["PLR2004", "TRY003"]
 
 [tool.ruff.lint.per-file-ignores]

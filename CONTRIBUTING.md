@@ -29,8 +29,14 @@ behind them, and every design decision, live in [`docs/adr/`](docs/adr).
 11. **Git workflow.** Work and commit on `main`, locally. Never push, open pull requests or merge.
     When work is committed and ready, say **READY TO PUSH** and stop. The owner pushes and reports
     the CI result. A red CI run is fixed with a new commit.
-12. **No AI-assistant files.** No `CLAUDE.md`, `AGENTS.md` or similar.
-13. **Milestone order is fixed:** M3, then M4, M5, M6, M7. Deferred work is listed per milestone in
+12. **Every file read and write names `encoding="utf-8"`**: `open`, `Path.read_text`,
+    `Path.write_text`, `subprocess.run(..., encoding="utf-8")` instead of `text=True`, and bytes
+    decoded with `.decode("utf-8")`. This applies to project code and to any one-off script used
+    to edit files. Windows defaults to cp1252, and a script that read and rewrote ADR 0015 with the
+    default garbled its dashes and ellipses on every pass. Ruff's `PLW1514` (enabled on its own
+    with `explicit-preview-rules`) enforces it in project code.
+13. **No AI-assistant files.** No `CLAUDE.md`, `AGENTS.md` or similar.
+14. **Milestone order is fixed:** M3, then M4, M5, M6, M7. Deferred work is listed per milestone in
     [`docs/roadmap.md`](docs/roadmap.md).
 
 ## Everyday commands

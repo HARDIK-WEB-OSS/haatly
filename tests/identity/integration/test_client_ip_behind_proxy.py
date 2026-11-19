@@ -44,7 +44,7 @@ def compose(tmp_path_factory: pytest.TempPathFactory) -> dict[str, Any]:
         cwd=REPO_ROOT,
         env=os.environ | COMPOSE_SECRETS,
         capture_output=True,
-        text=True,
+        encoding="utf-8",
         check=True,
     )
     config: dict[str, Any] = json.loads(result.stdout)
