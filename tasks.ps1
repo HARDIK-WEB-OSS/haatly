@@ -126,7 +126,11 @@ function Invoke-MigrateRoundtrip {
         Invoke-Uv @('alembic', 'check')
     } finally {
         foreach ($entry in $saved.GetEnumerator()) {
-            [Environment]::SetEnvironmentVariable($entry.Key, $entry.Value)
+            if ($null -eq $entry.Value) {
+                Remove-Item -Path "Env:$($entry.Key)" -ErrorAction SilentlyContinue
+            } else {
+                [Environment]::SetEnvironmentVariable($entry.Key, $entry.Value)
+            }
         }
         docker rm --force $name *> $null
     }
