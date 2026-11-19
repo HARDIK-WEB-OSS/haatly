@@ -39,6 +39,7 @@ POWERSHELL = Syntax(line_markers=("#",), blocks=(("<#", "#>"),), quotes="'\"")
 JAVASCRIPT = Syntax(line_markers=("//",), blocks=(("/*", "*/"),), quotes="'\"`")
 CSS = Syntax(blocks=(("/*", "*/"),), quotes="'\"")
 MARKUP = Syntax(blocks=(("{#", "#}"), ("<!--", "-->")))
+EDITORCONFIG = Syntax(line_markers=("#", ";"), marker_needs_boundary=True)
 PLAIN = Syntax()
 
 SYNTAX_BY_SUFFIX: dict[str, Syntax] = {
@@ -65,6 +66,7 @@ SYNTAX_BY_NAME: dict[str, Syntax] = {
     ".gitattributes": HASH,
     ".dockerignore": HASH,
     ".env.example": HASH,
+    ".editorconfig": EDITORCONFIG,
     ".python-version": PLAIN,
 }
 EXEMPT_SUFFIXES = frozenset({".md", ".png", ".jpg", ".jpeg", ".ico", ".woff2", ".svg"})

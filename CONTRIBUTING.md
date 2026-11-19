@@ -38,6 +38,12 @@ behind them, and every design decision, live in [`docs/adr/`](docs/adr).
 13. **No AI-assistant files.** No `CLAUDE.md`, `AGENTS.md` or similar.
 14. **Milestone order is fixed:** M3, then M4, M5, M6, M7. Deferred work is listed per milestone in
     [`docs/roadmap.md`](docs/roadmap.md).
+15. **Every file is LF**, except `*.ps1`, which is CRLF (`.gitattributes`, `.editorconfig`). Edit
+    scripts write with `newline="\n"`: `open(path, "w", encoding="utf-8", newline="\n")` or
+    `Path.write_text(text, encoding="utf-8", newline="\n")`. Without it, Python on Windows turns
+    every `\n` into `\r\n`, and one script rewrote a whole module as CRLF on 2026-11-20.
+    `ruff format` (`line-ending = "lf"`) and the pre-commit hook `mixed-line-ending --fix=lf`
+    catch what slips through.
 
 ## Everyday commands
 

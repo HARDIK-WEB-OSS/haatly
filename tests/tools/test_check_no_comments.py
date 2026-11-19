@@ -42,6 +42,8 @@ def lines_flagged(tmp_path: Path, name: str, text: str) -> list[int]:
         ("Dockerfile", "FROM scratch\n# planted\n", 2),
         ("Caddyfile", "localhost {\n\t# planted\n}\n", 2),
         (".gitignore", "# planted\n", 1),
+        (".editorconfig", "root = true\n# planted\n", 2),
+        (".editorconfig", "[*]\n; planted\n", 2),
         ("script.py.mako", "x = ${value}  # planted\n", 1),
     ],
 )
@@ -82,6 +84,7 @@ def test_docstring_is_rejected(tmp_path: Path, source: str) -> None:
         ("tasks.ps1", '$x = "a # b"\n'),
         ("run.sh", "#!/bin/sh\necho ok\n"),
         (".python-version", "3.12"),
+        (".editorconfig", "root = true\n\n[*.ps1]\nend_of_line = crlf\n"),
         ("notes.md", "# Heading\n"),
     ],
 )
