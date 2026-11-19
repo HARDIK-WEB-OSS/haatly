@@ -1,7 +1,8 @@
 # 0016 Catalog, price visibility and discovery
 
-- Status: Implemented (716b5aa, e80d1e1). Catalog, price visibility and discovery in 716b5aa; the
-  latency measurement in e80d1e1.
+- Status: Implemented (716b5aa, e80d1e1, f280b84). Catalog, price visibility and discovery in
+  716b5aa; the first latency measurement in e80d1e1; indexed search candidates (ADR 0017) and the
+  M3 latency targets in f280b84.
 - Date: 2026-11-18
 
 ## Context
@@ -103,7 +104,11 @@ views run with the caller's policies, so they reveal nothing the caller could no
 - The policies are semi-joins on small, indexed views, so the planner can use hash joins rather
   than calling a function per row. The latency test measures what that costs.
 
-### Measured cost (M3 exit)
+### First measurement (superseded)
+
+These numbers were measured on unanalysed tables. The seed's `ANALYZE` ran as `haatly_app`, which
+owns no tables, so Postgres skipped every one of them. They are kept for the record and are
+superseded by "Measured cost after ADR 0017" below.
 
 `tests/discovery/integration/test_discovery_latency.py` seeds 200 live stores around one PIN with
 50 active products each (10 000 products, one priced variant each; a third of the stores hide
@@ -135,3 +140,68 @@ change p95, because a 25 km radius covers most of the seeded stores. Cost theref
 the number of products within the radius. If it outgrows the budget, the fix is a candidate search
 that can use the indexes, for example a `SECURITY DEFINER` function returning matching product ids
 that the RLS-checked views then filter. That is a new decision and needs its own ADR.
+
+That fix is ADR 0017.
+
+### Measured cost after ADR 0017 (M3 exit, f280b84)
+
+The latency test now analyzes the seeded tables as the owner before it measures. It runs four kinds
+of search, each over three origins and radii of 5, 10 and 25 km:
+
+| Search | Matching products (of 10 000) |
+|---|---|
+| every product: "handwoven", in every description | 10 000 |
+| a tenth: "saree" | 1 055 |
+| under 1%: "pashmeena shawl" | 88 |
+| mixed: the ten searches above, with misspellings | 259 to 1 807 each |
+
+Two runs on the committed code, on the development machine (Windows, Docker Desktop, Postgres in a
+container), without coverage, in milliseconds:
+
+| Case | Run 1 p50 / p95 / p99 | Run 2 p50 / p95 / p99 |
+|---|---|---|
+| `/discover/stores`, anonymous | 21.8 / 35.7 / 50.8 | 17.9 / 24.6 / 36.3 |
+| products, every product, anonymous | 50.3 / 93.0 / 115.2 | 49.1 / 92.7 / 127.1 |
+| products, every product, member of 20 stores | 91.9 / 138.5 / 168.6 | 88.1 / 140.8 / 166.5 |
+| products, a tenth, anonymous | 29.9 / 44.0 / 66.2 | 29.4 / 41.7 / 50.0 |
+| products, a tenth, member of 20 stores | 69.6 / 120.7 / 172.0 | 61.9 / 85.1 / 109.1 |
+| products, under 1%, anonymous | 27.9 / 44.8 / 65.1 | 24.1 / 36.0 / 51.3 |
+| products, under 1%, member of 20 stores | 59.2 / 117.6 / 170.9 | 55.5 / 76.3 / 91.7 |
+| products, mixed, anonymous | 33.0 / 51.5 / 60.4 | 33.7 / 52.2 / 62.9 |
+| products, mixed, member of 20 stores | 67.1 / 104.9 / 233.7 | 67.1 / 91.3 / 118.5 |
+
+### M3 latency targets
+
+The owner set these targets on 2026-11-20 from the evidence below:
+
+- **Anonymous narrow and typical searches: p95 < 50 ms.**
+  - Met for stores, for the tenth and for under 1%.
+  - Missed for the mixed set: p95 51.5 and 52.2 ms on the committed code, against 49.5 ms in one
+    run before the commit.
+- **Broad searches and signed-in requests: p95 < 150 ms on the development machine.** Met in both
+  runs. The worst case is 140.8 ms.
+- **Ranking order is unchanged.** A cheaper ranking that alters results was rejected.
+- These are development-machine numbers. The resume numbers are re-measured on Linux staging in
+  M7.
+
+### Where the time goes now
+
+`EXPLAIN (ANALYZE, BUFFERS)` of the slowest case: every product, member of 20 stores, 25 km.
+
+- **Ranking, about 41 ms of the function's 48 ms.** `ts_rank + word_similarity` runs for each of
+  the 7 450 visible matches, about 5.5 µs a row. The GIN bitmap scan over `product_search` takes
+  5 ms. The hash semi join against the caller's 220 visible scopes takes about 1 ms. This cost grows
+  with the number of visible matches within the radius, and keeping the ranking order means
+  paying it.
+- **Signed-in overhead, about 24–30 ms per request, outside discovery.**
+  - A signed-in request opens two extra transactions before its own: identity resolves the
+    session, then stores looks up whether the user owns a store.
+  - Each Postgres round trip costs 1.2–1.5 ms through Docker Desktop.
+  - `/me` alone takes 25.6 ms. `/discover/stores` takes 18.5 ms anonymous against 42.3 ms for a
+    signed-in buyer.
+  - Merging that work into one transaction is the first item of M4 (`docs/roadmap.md`), with a
+    target of halving the overhead. This table is re-measured after it.
+- **Planning the outer discovery query, 5–13 ms.** The storefront views and their policies are
+  inlined, so the plan is large.
+
+The test still fails above a p95 of 500 ms, as a regression guard for CI.
