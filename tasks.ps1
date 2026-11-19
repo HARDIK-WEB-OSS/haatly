@@ -126,12 +126,41 @@ function Invoke-MakeAdmin {
     Invoke-Uv @('python', '-m', 'haatly.identity.adapters.make_admin', $Rest[0])
 }
 
+function Send-LoginBody {
+    param([int]$Size)
+    $body = '{"email":"' + ('a' * $Size) + '","password":"x"}'
+    $arguments = @{
+        Uri = 'https://localhost:8443/auth/login'
+        Method = 'Post'
+        Body = $body
+        ContentType = 'application/json'
+        Headers = @{ Origin = 'https://localhost:8443' }
+        SkipCertificateCheck = $true
+        SkipHttpErrorCheck = $true
+        UseBasicParsing = $true
+    }
+    return (Invoke-WebRequest @arguments).StatusCode
+}
+
+function Test-BodyLimit {
+    $oversized = Send-LoginBody (2 * 1024 * 1024)
+    if ($oversized -ne 413) {
+        throw "Smoke: a 2 MB body got $oversized instead of 413"
+    }
+    $allowed = Send-LoginBody (900 * 1024)
+    if ($allowed -ne 422) {
+        throw "Smoke: a 900 KB body got $allowed instead of reaching the API (422)"
+    }
+    Write-Host "Smoke: 2 MB body -> $oversized from Caddy; 900 KB body -> $allowed from the API"
+}
+
 function Invoke-Smoke {
     $env:API_UPSTREAM = 'api:8000'
     try {
         Invoke-Native 'docker' @('compose', '--profile', 'app', 'up', '--detach', '--build', '--wait')
         $response = Invoke-WebRequest -Uri 'https://localhost:8443/ready' -SkipCertificateCheck -UseBasicParsing
         Write-Host "Smoke: GET https://localhost:8443/ready -> $($response.StatusCode) $($response.Content)"
+        Test-BodyLimit
         Start-Sleep -Seconds 10
         $workerState = (docker compose --profile app ps --all --format '{{.State}}' worker).Trim()
         if ($workerState -ne 'running') {

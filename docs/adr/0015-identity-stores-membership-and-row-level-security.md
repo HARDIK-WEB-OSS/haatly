@@ -19,7 +19,7 @@ only; HTML pages come later.
   A successful login re-hashes when `check_needs_rehash` says the stored parameters are weaker
   than today's. Unknown emails still spend one Argon2 verification so timing does not reveal
   which emails have accounts.
-- Emails are trimmed, lower-cased and unique. Passwords are 10ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Å“128 characters.
+- Emails are trimmed, lower-cased and unique. Passwords are 10ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œ128 characters.
 - Sessions are opaque 256-bit tokens. Only their SHA-256 is stored. The cookie is
   `haatly_session`: `HttpOnly`, `Secure`, `SameSite=Lax`, `Path=/`.
 - A session dies after 24 h idle or 14 d after creation, whichever comes first. `last_seen_at`
@@ -105,10 +105,10 @@ Acceptance is one transaction:
 1. Present the token (sets the capability) and load the invitation.
 2. Refuse if it is closed, if the store is not active, if the user owns the store, is blocked or
    is already a full member.
-3. Claim it with a conditional `UPDATE ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ WHERE accepted_at IS NULL AND revoked_at IS NULL AND
+3. Claim it with a conditional `UPDATE ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¦ WHERE accepted_at IS NULL AND revoked_at IS NULL AND
    expires_at > now`. Of two simultaneous claims, the second waits on the row lock and then
    matches nothing, so it gets a 404.
-4. Upsert the membership `ON CONFLICT (store_id, user_id) DO UPDATE ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ WHERE` the existing row is
+4. Upsert the membership `ON CONFLICT (store_id, user_id) DO UPDATE ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¦ WHERE` the existing row is
    neither blocked nor already a full member. If one user accepts two invitations at once, the
    second waits on the unique index, then updates nothing and gets a 409. The transaction rolls
    back, so its invitation is not burned.
@@ -126,6 +126,10 @@ Acceptance is one transaction:
 - Store approval, suspension and reinstatement write to the append-only `platform.audit_log` in
   the same transaction.
 - Caddy now sends `Strict-Transport-Security: max-age=31536000; includeSubDomains`.
+- Caddy refuses request bodies over 1 MB with 413 (`request_body max_size 1MB`) before they
+  reach the API, which would otherwise parse any size in memory (review finding M7). The smoke
+  task sends a 2 MB body and expects 413, and a 900 KB body and expects the API's own answer.
+  Uploads will need a larger limit on their own route.
 
 ### The generated leak suite
 
