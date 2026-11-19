@@ -37,6 +37,9 @@ proposed deploying before checkout; that plan was not adopted, and the milestone
   `/ready` must check it from M4.
 - **L8 repeat approve.** Approving an already-decided member returns 404; return 409
   "already decided".
+- **Dead jobs in admin.** `list_dead_jobs` and `retry_dead_job` exist (ADR 0003) but no admin
+  route exposes them. M4 adds the first jobs that call Razorpay, so an operator must be able to
+  see and retry a dead one.
 
 ## M6: payouts and reconciliation
 

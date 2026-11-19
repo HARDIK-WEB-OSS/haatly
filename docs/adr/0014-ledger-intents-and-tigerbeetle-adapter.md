@@ -80,8 +80,8 @@ Each run does four steps.
    becomes drift. Every transfer carries its intent id in `user_data_128`, so drift rows name the
    intent TigerBeetle believes in. Nothing is ever deleted from TigerBeetle.
 4. **Balances:** each registered `BalanceProjection` states the expected value per account and how
-   to read it from a TigerBeetle balance. Differences are reported. M1 registers none; inventory
-   registers display stock in M2.
+   to read it from a TigerBeetle balance. Differences are reported. M1 registers none. Inventory
+   registers display stock when it lands in M4.
 
 A run is clean when there is no open drift and no mismatch. A dirty run logs a warning from the
 `haatly.ledger` logger.

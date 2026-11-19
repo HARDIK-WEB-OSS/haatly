@@ -42,5 +42,6 @@ removed when a migration is reviewed, and the checker fails the commit if one is
 ## Consequences
 
 - Third-party files that carry licence comments (for example a vendored HTMX build) cannot be
-  committed as-is. When one is needed (M2), a separate ADR will decide between serving it from a
+  committed as-is. When one is needed (with the first HTML page; M2 and M3 ship JSON endpoints
+  only), a separate ADR will decide between serving it from a
   pinned CDN and a vendor directory with an explicit, reviewed exemption.

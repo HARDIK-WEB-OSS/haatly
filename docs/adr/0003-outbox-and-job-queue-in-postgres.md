@@ -43,7 +43,9 @@ a Postgres transaction.
 - **Backoff** is exponential with full jitter: `delay = random(0, min(cap, base · 2^(attempt-1)))`,
   base 2 s, cap 30 min. Random comes from `SystemRandom` and is injected so tests are exact.
 - After `max_attempts`, the job is `dead`. Admin can list dead jobs and revive them
-  (`retry_dead_job` resets attempts and queues them). The admin UI comes with M2.
+  (`retry_dead_job` resets attempts and queues them). These use cases exist, but no admin route or
+  page exposes them yet. M2 shipped JSON endpoints only, and the dead-job view is listed under M4
+  in `docs/roadmap.md`, because M4 adds the first jobs that call Razorpay.
 - `pg_notify('haatly_wakeup', …)` fires from statement-level `AFTER INSERT` triggers on `jobs`
   and `outbox_events`. The worker `LISTEN`s on a dedicated asyncpg connection and otherwise polls
   every `worker_idle_seconds` (default 5 s). NOTIFY is only a hint; correctness never depends on it.
