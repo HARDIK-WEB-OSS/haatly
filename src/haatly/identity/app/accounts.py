@@ -151,9 +151,8 @@ class Accounts:
         if not await self.hasher.verify(user.password_hash, current):
             raise InvalidCredentialsError
         password_hash = await self.hasher.hash(check_password(new))
-        async with self.uow_factory(context_of(principal)) as uow:
-            await uow.users.set_password_hash(user.id, password_hash, self.clock.now())
         async with self.uow_factory(SYSTEM) as uow:
+            await uow.users.set_password_hash(user.id, password_hash, self.clock.now())
             await uow.sessions.delete_for_user(user.id)
             return await self.open_session(uow, user.id)
 

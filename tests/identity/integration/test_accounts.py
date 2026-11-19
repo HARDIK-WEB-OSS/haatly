@@ -218,3 +218,74 @@ async def test_sessions_expire_after_idling_and_at_their_absolute_limit(
         clock.advance(timedelta(hours=23))
     clock.advance(timedelta(days=1))
     assert await service.resolve(busy.token) is None
+
+
+class CrashError(Exception):
+    pass
+
+
+async def crash(*_: object) -> None:
+    raise CrashError
+
+
+class CrashingTokens(SecretTokens):
+    def __init__(self) -> None:
+        self.armed = False
+
+    def new_token(self) -> str:
+        if self.armed:
+            raise CrashError
+        return super().new_token()
+
+
+async def two_sessions(service: Accounts, email: str) -> tuple[str, str]:
+    first = (await service.register(email, PASSWORD)).token
+    second = (await service.login(email, PASSWORD, "10.0.0.1", None)).token
+    return first, second
+
+
+async def assert_nothing_changed(
+    service: Accounts, engine: AsyncEngine, email: str, old_hash: str, tokens: tuple[str, ...]
+) -> None:
+    assert await stored_hash(engine, email) == old_hash
+    for token in tokens:
+        assert await service.resolve(token) is not None
+    with pytest.raises(InvalidCredentialsError):
+        await service.authenticate(email, "a-much-better-passphrase")
+    assert (await service.authenticate(email, PASSWORD)).email == email
+
+
+async def test_a_crash_before_revoking_sessions_leaves_the_old_password_and_sessions(
+    app_engine: AsyncEngine, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    service = accounts(app_engine, FrozenClock())
+    email = new_email()
+    tokens = await two_sessions(service, email)
+    old_hash = await stored_hash(app_engine, email)
+    principal = await service.resolve(tokens[0])
+    assert principal is not None
+    target = "haatly.identity.adapters.sql_identity.SqlSessionRepository.delete_for_user"
+    monkeypatch.setattr(target, crash)
+    with pytest.raises(CrashError):
+        await service.change_password(principal, PASSWORD, "a-much-better-passphrase")
+    monkeypatch.undo()
+    await assert_nothing_changed(service, app_engine, email, old_hash, tokens)
+
+
+async def test_a_crash_before_the_new_session_leaves_the_old_password_and_sessions(
+    app_engine: AsyncEngine,
+) -> None:
+    clock = FrozenClock()
+    tokens_source = CrashingTokens()
+    service = accounts(app_engine, clock)
+    service.tokens = tokens_source
+    email = new_email()
+    tokens = await two_sessions(service, email)
+    old_hash = await stored_hash(app_engine, email)
+    principal = await service.resolve(tokens[0])
+    assert principal is not None
+    tokens_source.armed = True
+    with pytest.raises(CrashError):
+        await service.change_password(principal, PASSWORD, "a-much-better-passphrase")
+    tokens_source.armed = False
+    await assert_nothing_changed(service, app_engine, email, old_hash, tokens)

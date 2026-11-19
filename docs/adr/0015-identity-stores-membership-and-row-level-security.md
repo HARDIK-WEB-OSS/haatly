@@ -19,14 +19,16 @@ only; HTML pages come later.
   A successful login re-hashes when `check_needs_rehash` says the stored parameters are weaker
   than today's. Unknown emails still spend one Argon2 verification so timing does not reveal
   which emails have accounts.
-- Emails are trimmed, lower-cased and unique. Passwords are 10â€“128 characters.
+- Emails are trimmed, lower-cased and unique. Passwords are 10Ã¢â‚¬â€œ128 characters.
 - Sessions are opaque 256-bit tokens. Only their SHA-256 is stored. The cookie is
   `haatly_session`: `HttpOnly`, `Secure`, `SameSite=Lax`, `Path=/`.
 - A session dies after 24 h idle or 14 d after creation, whichever comes first. `last_seen_at`
   is written at most once a minute.
 - The token rotates on login (the presented token is deleted), on registration (a new session)
-  and on the role change that opening a store causes. A password change deletes every session of
-  the user and issues one new one.
+  and on the role change that opening a store causes. A password change stores the new hash,
+  deletes every session of the user and issues one new one, all in one transaction. Until review
+  finding M1 was fixed, the hash and the revocation were two transactions, and a crash between
+  them left a stolen session alive under the new password.
 - Login is limited per IP (50 per 15 min) and per (email, IP) (10 per 15 min), in
   `platform.rate_limit_counters`. Counters are written in their own transaction before the
   password is checked, so failures are always counted. There is no per-account lockout, so an
@@ -98,10 +100,10 @@ Acceptance is one transaction:
 1. Present the token (sets the capability) and load the invitation.
 2. Refuse if it is closed, if the store is not active, if the user owns the store, is blocked or
    is already a full member.
-3. Claim it with a conditional `UPDATE â€¦ WHERE accepted_at IS NULL AND revoked_at IS NULL AND
+3. Claim it with a conditional `UPDATE Ã¢â‚¬Â¦ WHERE accepted_at IS NULL AND revoked_at IS NULL AND
    expires_at > now`. Of two simultaneous claims, the second waits on the row lock and then
    matches nothing, so it gets a 404.
-4. Upsert the membership `ON CONFLICT (store_id, user_id) DO UPDATE â€¦ WHERE` the existing row is
+4. Upsert the membership `ON CONFLICT (store_id, user_id) DO UPDATE Ã¢â‚¬Â¦ WHERE` the existing row is
    neither blocked nor already a full member. If one user accepts two invitations at once, the
    second waits on the unique index, then updates nothing and gets a 409. The transaction rolls
    back, so its invitation is not burned.
