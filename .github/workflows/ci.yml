@@ -39,9 +39,7 @@ jobs:
         run: ./tasks.ps1 lint
       - name: Typecheck (mypy --strict)
         run: ./tasks.ps1 typecheck
-      - name: Start Postgres
-        run: docker compose up --detach --wait postgres
-      - name: Migrations upgrade, downgrade, upgrade, alembic check
+      - name: Migrations upgrade, downgrade, upgrade, alembic check on a throwaway database
         run: ./tasks.ps1 migrate-roundtrip
       - name: Require io_uring for the TigerBeetle client
         run: |

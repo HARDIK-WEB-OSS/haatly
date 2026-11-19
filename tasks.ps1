@@ -71,11 +71,65 @@ function Invoke-Migrate {
     Invoke-Uv @('alembic', 'upgrade', 'head')
 }
 
+function Start-ThrowawayDatabase {
+    param([hashtable]$Passwords)
+    $name = "haatly-roundtrip-$(New-Secret)"
+    $roles = Join-Path $Root 'docker/postgres/initdb/01-roles.sql'
+    $arguments = @('run', '--detach', '--rm', '--name', $name, '--publish', '127.0.0.1::5432',
+        '--env', 'POSTGRES_DB=haatly_roundtrip',
+        '--volume', "${roles}:/docker-entrypoint-initdb.d/20-haatly-roles.sql:ro")
+    foreach ($entry in $Passwords.GetEnumerator()) {
+        $arguments += @('--env', "$($entry.Key)=$($entry.Value)")
+    }
+    Invoke-Native 'docker' ($arguments + @('postgis/postgis:16-3.5')) | Out-Null
+    return $name
+}
+
+function Wait-ThrowawayDatabase {
+    param([string]$Name)
+    $deadline = (Get-Date).AddSeconds(90)
+    while ((Get-Date) -lt $deadline) {
+        docker exec $Name pg_isready -h 127.0.0.1 -U postgres -d haatly_roundtrip *> $null
+        if ($LASTEXITCODE -eq 0) {
+            return ((docker port $Name 5432) | Select-Object -First 1).Split(':')[-1].Trim()
+        }
+        Start-Sleep -Seconds 1
+    }
+    throw "the throwaway database $Name did not become ready"
+}
+
 function Invoke-MigrateRoundtrip {
-    Invoke-Uv @('alembic', 'upgrade', 'head')
-    Invoke-Uv @('alembic', 'downgrade', 'base')
-    Invoke-Uv @('alembic', 'upgrade', 'head')
-    Invoke-Uv @('alembic', 'check')
+    $passwords = @{
+        POSTGRES_PASSWORD = New-Secret
+        HAATLY_DB_OWNER_PASSWORD = New-Secret
+        HAATLY_DB_APP_PASSWORD = New-Secret
+        HAATLY_DB_OPS_PASSWORD = New-Secret
+    }
+    $name = Start-ThrowawayDatabase $passwords
+    $saved = @{}
+    try {
+        $overrides = @{
+            HAATLY_DB_HOST = '127.0.0.1'
+            HAATLY_DB_PORT = Wait-ThrowawayDatabase $name
+            HAATLY_DB_NAME = 'haatly_roundtrip'
+            HAATLY_DB_OWNER_PASSWORD = $passwords.HAATLY_DB_OWNER_PASSWORD
+            HAATLY_DB_APP_PASSWORD = $passwords.HAATLY_DB_APP_PASSWORD
+        }
+        foreach ($entry in $overrides.GetEnumerator()) {
+            $saved[$entry.Key] = [Environment]::GetEnvironmentVariable($entry.Key)
+            [Environment]::SetEnvironmentVariable($entry.Key, [string]$entry.Value)
+        }
+        Write-Host "Migration round trip on throwaway database $name (port $($overrides.HAATLY_DB_PORT))"
+        Invoke-Uv @('alembic', 'upgrade', 'head')
+        Invoke-Uv @('alembic', 'downgrade', 'base')
+        Invoke-Uv @('alembic', 'upgrade', 'head')
+        Invoke-Uv @('alembic', 'check')
+    } finally {
+        foreach ($entry in $saved.GetEnumerator()) {
+            [Environment]::SetEnvironmentVariable($entry.Key, $entry.Value)
+        }
+        docker rm --force $name *> $null
+    }
 }
 
 function Invoke-Test {
