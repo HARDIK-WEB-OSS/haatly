@@ -19,7 +19,7 @@ only; HTML pages come later.
   A successful login re-hashes when `check_needs_rehash` says the stored parameters are weaker
   than today's. Unknown emails still spend one Argon2 verification so timing does not reveal
   which emails have accounts.
-- Emails are trimmed, lower-cased and unique. Passwords are 10–128 characters.
+- Emails are trimmed, lower-cased and unique. Passwords are 10â€“128 characters.
 - Sessions are opaque 256-bit tokens. Only their SHA-256 is stored. The cookie is
   `haatly_session`: `HttpOnly`, `Secure`, `SameSite=Lax`, `Path=/`.
 - A session dies after 24 h idle or 14 d after creation, whichever comes first. `last_seen_at`
@@ -31,6 +31,19 @@ only; HTML pages come later.
   `platform.rate_limit_counters`. Counters are written in their own transaction before the
   password is checked, so failures are always counted. There is no per-account lockout, so an
   attacker cannot lock a user out (v1 audit F-6).
+- **The client IP behind Caddy.** The limits above are keyed on the real client IP. Behind Caddy,
+  the TCP peer is Caddy, so uvicorn runs with `--proxy-headers --forwarded-allow-ips
+  172.30.53.2`. That is Caddy's fixed address on the `edge` network (172.30.53.0/24). Only `caddy`
+  and `api` are on `edge`, Caddy is on no other network, and other containers get addresses from
+  172.30.53.128/25 only, so Caddy is the only peer whose `X-Forwarded-For` is believed. The network
+  gateway (172.30.53.1) is deliberately not trusted, so a process on the host cannot forge the
+  header by connecting to the API directly.
+  Caddy keeps its default behaviour: it replaces any client-supplied `X-Forwarded-For` with the
+  address it sees. A peer outside `edge` is keyed on its own address, whatever header it sends.
+  Until this was fixed (review finding H1, 2026-11-18), every login looked like it came from Caddy,
+  so the per-IP limit was one global bucket and the (email, IP) limit locked accounts out.
+  `tests/identity/integration/test_client_ip_behind_proxy.py` reads the resolved compose
+  configuration and drives the app through uvicorn's proxy middleware with exactly those settings.
 
 ### Who the caller is
 
@@ -85,10 +98,10 @@ Acceptance is one transaction:
 1. Present the token (sets the capability) and load the invitation.
 2. Refuse if it is closed, if the store is not active, if the user owns the store, is blocked or
    is already a full member.
-3. Claim it with a conditional `UPDATE … WHERE accepted_at IS NULL AND revoked_at IS NULL AND
+3. Claim it with a conditional `UPDATE â€¦ WHERE accepted_at IS NULL AND revoked_at IS NULL AND
    expires_at > now`. Of two simultaneous claims, the second waits on the row lock and then
    matches nothing, so it gets a 404.
-4. Upsert the membership `ON CONFLICT (store_id, user_id) DO UPDATE … WHERE` the existing row is
+4. Upsert the membership `ON CONFLICT (store_id, user_id) DO UPDATE â€¦ WHERE` the existing row is
    neither blocked nor already a full member. If one user accepts two invitations at once, the
    second waits on the unique index, then updates nothing and gets a 409. The transaction rolls
    back, so its invitation is not burned.
