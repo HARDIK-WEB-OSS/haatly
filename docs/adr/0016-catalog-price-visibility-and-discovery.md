@@ -1,6 +1,7 @@
 # 0016 Catalog, price visibility and discovery
 
-- Status: Accepted. To be implemented in M3.
+- Status: Implemented (716b5aa, e80d1e1). Catalog, price visibility and discovery in 716b5aa; the
+  latency measurement in e80d1e1.
 - Date: 2026-11-18
 
 ## Context
@@ -117,6 +118,9 @@ Postgres in a container):
 | `/discover/stores`, anonymous | 20.9 ms | 27.3 ms | 33.3 ms |
 | `/discover/products`, anonymous | 50.1 ms | 150.0 ms | 170.8 ms |
 | `/discover/products`, member of 20 stores | 70.7 ms | 166.2 ms | 204.6 ms |
+
+Inside `./tasks.ps1 check`, with coverage tracing on, the same test measured p95s of
+37.4 ms, 151.7 ms and 170.5 ms on the committed code.
 
 The test fails above a p95 of 500 ms. That budget is about three times the local figure, because
 CI runners are slower. It catches a lost index or a policy that turns into a per-row function

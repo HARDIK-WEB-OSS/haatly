@@ -1,6 +1,6 @@
 # 0013 Discovery data and email delivery
 
-- Status: Accepted for PIN codes and distance (M3). The email part is Proposed for M7: no
+- Status: Implemented (716b5aa) for PIN codes and distance. The email part is Proposed for M7: no
   `EmailSender` port exists yet.
 - Date: 2026-11-18
 
