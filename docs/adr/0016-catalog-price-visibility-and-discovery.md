@@ -178,6 +178,9 @@ The owner set these targets on 2026-11-20 from the evidence below:
   - Met for stores, for the tenth and for under 1%.
   - Missed for the mixed set: p95 51.5 and 52.2 ms on the committed code, against 49.5 ms in one
     run before the commit.
+  - The owner accepted this miss on 2026-11-20 as within run-to-run spread on the development
+    machine. No further tuning in M3. The mixed set is re-measured on Linux staging in M7, and
+    again after the first M4 item.
 - **Broad searches and signed-in requests: p95 < 150 ms on the development machine.** Met in both
   runs. The worst case is 140.8 ms.
 - **Ranking order is unchanged.** A cheaper ranking that alters results was rejected.
