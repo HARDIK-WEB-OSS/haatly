@@ -1,6 +1,6 @@
 # 0010 Order, refund and return lifecycle
 
-- Status: Accepted (implemented in M4 and M5)
+- Status: Accepted. To be implemented in M4 and M5.
 - Date: 2026-11-18
 
 ## Decision

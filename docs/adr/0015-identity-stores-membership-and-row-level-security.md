@@ -1,6 +1,8 @@
 # 0015 Identity, stores, membership and how row-level security enforces them
 
-- Status: Accepted (implemented in M2)
+- Status: Implemented (5cd6d01, bd4f89b). Identity, stores, membership and row-level security
+  in 5cd6d01. The login limits only worked behind Caddy from bd4f89b (review finding H1);
+  before that, every login looked like it came from Caddy.
 - Date: 2026-11-18
 
 ## Context
@@ -19,7 +21,7 @@ only; HTML pages come later.
   A successful login re-hashes when `check_needs_rehash` says the stored parameters are weaker
   than today's. Unknown emails still spend one Argon2 verification so timing does not reveal
   which emails have accounts.
-- Emails are trimmed, lower-cased and unique. Passwords are 10ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œ128 characters.
+- Emails are trimmed, lower-cased and unique. Passwords are 10–128 characters.
 - Sessions are opaque 256-bit tokens. Only their SHA-256 is stored. The cookie is
   `haatly_session`: `HttpOnly`, `Secure`, `SameSite=Lax`, `Path=/`.
 - A session dies after 24 h idle or 14 d after creation, whichever comes first. `last_seen_at`
@@ -33,6 +35,11 @@ only; HTML pages come later.
   `platform.rate_limit_counters`. Counters are written in their own transaction before the
   password is checked, so failures are always counted. There is no per-account lockout, so an
   attacker cannot lock a user out (v1 audit F-6).
+- Registration is limited to 10 an hour per client IP, join requests to 20 an hour per user,
+  and new invitations to 50 a day per store (review finding M3, commit e680ba1). Refused
+  registrations count too, which slows down probing for registered emails. Every limit raises
+  the platform's `RateLimitedError`, which the HTTP layer turns into one 429 response with
+  `Retry-After`.
 - **The client IP behind Caddy.** The limits above are keyed on the real client IP. Behind Caddy,
   the TCP peer is Caddy, so uvicorn runs with `--proxy-headers --forwarded-allow-ips
   172.30.53.2`. That is Caddy's fixed address on the `edge` network (172.30.53.0/24). Only `caddy`
@@ -105,10 +112,10 @@ Acceptance is one transaction:
 1. Present the token (sets the capability) and load the invitation.
 2. Refuse if it is closed, if the store is not active, if the user owns the store, is blocked or
    is already a full member.
-3. Claim it with a conditional `UPDATE ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¦ WHERE accepted_at IS NULL AND revoked_at IS NULL AND
+3. Claim it with a conditional `UPDATE … WHERE accepted_at IS NULL AND revoked_at IS NULL AND
    expires_at > now`. Of two simultaneous claims, the second waits on the row lock and then
    matches nothing, so it gets a 404.
-4. Upsert the membership `ON CONFLICT (store_id, user_id) DO UPDATE ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¦ WHERE` the existing row is
+4. Upsert the membership `ON CONFLICT (store_id, user_id) DO UPDATE … WHERE` the existing row is
    neither blocked nor already a full member. If one user accepts two invitations at once, the
    second waits on the unique index, then updates nothing and gets a 409. The transaction rolls
    back, so its invitation is not burned.

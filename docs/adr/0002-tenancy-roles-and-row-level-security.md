@@ -1,7 +1,7 @@
 # 0002 Tenancy context, database roles and row-level security
 
-- Status: Accepted (roles and tenant context in M0; RLS policies arrive with the first store-owned
-  table in M2)
+- Status: Implemented (0719c34, 5cd6d01). Roles and tenant context in 0719c34; row-level
+  security policies with the first store-owned tables in 5cd6d01.
 - Date: 2026-11-18
 
 ## Context

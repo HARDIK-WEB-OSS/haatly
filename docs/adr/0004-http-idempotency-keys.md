@@ -1,6 +1,7 @@
 # 0004 HTTP idempotency keys
 
-- Status: Accepted (store and use case in M0; wired to checkout routes in M4)
+- Status: Implemented (0719c34, 840ac2c). Store and gate in 0719c34; owner-matched row-level
+  security in 840ac2c. Wiring to the checkout routes is Accepted for M4.
 - Date: 2026-11-18
 
 ## Context

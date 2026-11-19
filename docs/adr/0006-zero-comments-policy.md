@@ -1,6 +1,6 @@
 # 0006 Zero-comments policy
 
-- Status: Accepted
+- Status: Implemented (0719c34)
 - Date: 2026-11-18
 
 ## Context

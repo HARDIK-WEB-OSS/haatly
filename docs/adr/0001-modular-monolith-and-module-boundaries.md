@@ -1,6 +1,6 @@
 # 0001 Modular monolith and module boundaries
 
-- Status: Accepted (amended in M1: platform kernel, module dependency order)
+- Status: Implemented (0719c34). Amended in M1: platform kernel, module dependency order.
 - Date: 2026-11-18
 
 ## Context

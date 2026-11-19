@@ -1,6 +1,6 @@
 # 0005 Time and identifiers
 
-- Status: Accepted
+- Status: Implemented (0719c34)
 - Date: 2026-11-18
 
 ## Decision

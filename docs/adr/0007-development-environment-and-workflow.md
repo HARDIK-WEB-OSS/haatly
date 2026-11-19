@@ -1,6 +1,6 @@
 # 0007 Development environment and workflow
 
-- Status: Accepted
+- Status: Implemented (0719c34, 5759ce1). The workflow rule was corrected in 5759ce1.
 - Date: 2026-11-18
 
 ## Context

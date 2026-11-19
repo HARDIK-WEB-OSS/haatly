@@ -1,6 +1,6 @@
 # 0012 Single-replica TigerBeetle in production
 
-- Status: Accepted for now, with known risk
+- Status: Accepted, with known risk. It applies from the first production deployment (M7).
 - Date: 2026-11-18
 
 ## Context

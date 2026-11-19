@@ -1,6 +1,6 @@
 # 0011 Money ledger model (TigerBeetle ledger 1, INR in paise)
 
-- Status: Accepted (implemented in M5 and M6)
+- Status: Accepted. To be implemented in M5 and M6.
 - Date: 2026-11-18
 
 ## Decision

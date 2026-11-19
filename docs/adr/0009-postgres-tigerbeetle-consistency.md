@@ -1,6 +1,7 @@
 # 0009 Consistency between Postgres and TigerBeetle
 
-- Status: Accepted (implemented from M1)
+- Status: Implemented (0719c34). Intents, deterministic ids, the applier and the reconciler.
+  Applying holds inline from checkout is Accepted for M4.
 - Date: 2026-11-18
 
 ## Context

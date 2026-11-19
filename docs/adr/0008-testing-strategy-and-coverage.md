@@ -1,6 +1,8 @@
 # 0008 Testing strategy and coverage
 
-- Status: Accepted
+- Status: Implemented (0719c34, 5cd6d01). Test layers, coverage gates and the RLS leak suite
+  exist. The price-field scan is Accepted for M3, recorded Razorpay fixtures for M4, and
+  end-to-end and load tests for M7.
 - Date: 2026-11-18
 
 ## Context

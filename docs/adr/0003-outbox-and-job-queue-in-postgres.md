@@ -1,6 +1,7 @@
 # 0003 Outbox and job queue in Postgres
 
-- Status: Accepted
+- Status: Implemented (0719c34, 840ac2c). Outbox, jobs and scheduler in 0719c34; row-level
+  security in 840ac2c. The retention job is Accepted for M6.
 - Date: 2026-11-18
 
 ## Context

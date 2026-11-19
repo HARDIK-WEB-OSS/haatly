@@ -1,6 +1,6 @@
 # 0014 Ledger intents, the TigerBeetle adapter and the platform kernel
 
-- Status: Accepted (implemented in M1)
+- Status: Implemented (0719c34)
 - Date: 2026-11-18
 
 ## Context
