@@ -8,6 +8,15 @@ import httpx
 from fastapi import FastAPI
 from sqlalchemy.ext.asyncio import AsyncEngine
 
+from haatly.catalog.public import (
+    Product,
+    ProductStatus,
+    ProductVisibility,
+    SqlCatalogUnitOfWorkFactory,
+    Variant,
+    VariantStatus,
+)
+from haatly.discovery.public import PinCode, Point, SqlDiscoveryUnitOfWorkFactory, StoreLocation
 from haatly.identity.public import (
     SESSION_COOKIE,
     SecretTokens,
@@ -90,6 +99,8 @@ class Seeder:
         self.identity = SqlIdentityUnitOfWorkFactory(self.engine)
         self.stores = SqlStoresUnitOfWorkFactory(self.engine)
         self.members = SqlMembershipUnitOfWorkFactory(self.engine)
+        self.catalog = SqlCatalogUnitOfWorkFactory(self.engine)
+        self.discovery = SqlDiscoveryUnitOfWorkFactory(self.engine)
 
     async def user(self, name: str, *, admin: bool = False) -> Actor:
         now = self.clock.now()
@@ -103,7 +114,14 @@ class Seeder:
             )
         return Actor(name, user.id, email, token)
 
-    async def store(self, owner: Actor, status: StoreStatus, *, published: bool) -> Store:
+    async def store(
+        self,
+        owner: Actor,
+        status: StoreStatus,
+        *,
+        published: bool,
+        prices: PriceVisibility = PriceVisibility.PUBLIC,
+    ) -> Store:
         assert owner.user_id is not None
         now = self.clock.now()
         slug = unique("shop")
@@ -120,7 +138,8 @@ class Seeder:
         )
         async with self.stores(SYSTEM) as uow:
             await uow.stores.add(store)
-            await uow.stores.update(store.id, StoreChanges(is_published=published), now)
+            changes = StoreChanges(is_published=published, price_visibility=prices)
+            await uow.stores.update(store.id, changes, now)
             changed = await uow.stores.set_status(store.id, StoreStatus.PENDING, status, now)
         assert changed is not None
         return changed
@@ -155,3 +174,49 @@ class Seeder:
         async with self.members(SYSTEM) as uow:
             await uow.invitations.add(invitation, hash_token(token))
         return IssuedInvite(invitation.id, token, label)
+
+    async def pin(self, pin_code: str, latitude: float, longitude: float) -> PinCode:
+        pin = PinCode(pin_code, "Bengaluru Urban", "Karnataka", Point(latitude, longitude))
+        async with self.discovery(SYSTEM) as uow:
+            await uow.pins.upsert([pin], "test-fixture")
+        return pin
+
+    async def locate(self, store: Store, pin: PinCode, point: Point | None = None) -> None:
+        location = StoreLocation(store.id, pin.pin_code, point or pin.centroid)
+        async with self.discovery(SYSTEM) as uow:
+            await uow.locations.put(location, self.clock.now())
+
+    async def product(
+        self,
+        store: Store,
+        *,
+        title: str | None = None,
+        visibility: ProductVisibility = ProductVisibility.PUBLIC,
+        status: ProductStatus = ProductStatus.ACTIVE,
+    ) -> Product:
+        product = Product(
+            self.ids.new_id(),
+            store.id,
+            title or unique("product"),
+            unique("details"),
+            visibility,
+            status,
+            self.clock.now(),
+        )
+        async with self.catalog(SYSTEM) as uow:
+            await uow.products.add(product)
+        return product
+
+    async def variant(self, product: Product, price_paise: int) -> Variant:
+        variant = Variant(
+            self.ids.new_id(),
+            product.store_id,
+            product.id,
+            unique("size"),
+            VariantStatus.ACTIVE,
+            price_paise,
+            self.clock.now(),
+        )
+        async with self.catalog(SYSTEM) as uow:
+            await uow.variants.add(variant)
+        return variant

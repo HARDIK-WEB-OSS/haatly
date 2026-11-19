@@ -4,6 +4,8 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from sqlalchemy.ext.asyncio import AsyncEngine
 
+from haatly.catalog.public import Catalog, SqlCatalogUnitOfWorkFactory, catalog_router
+from haatly.discovery.public import Discovery, SqlDiscoveryUnitOfWorkFactory, discovery_router
 from haatly.identity.public import (
     Accounts,
     Argon2idHasher,
@@ -47,6 +49,8 @@ def attach_services(app: FastAPI, engine: AsyncEngine, hasher: PasswordHasher) -
     app.state.memberships = Memberships(
         SqlMembershipUnitOfWorkFactory(engine), tokens, ids, clock, limiter
     )
+    app.state.catalog = Catalog(SqlCatalogUnitOfWorkFactory(engine), ids, clock)
+    app.state.discovery = Discovery(SqlDiscoveryUnitOfWorkFactory(engine), clock)
 
 
 def create_app(settings: Settings | None = None, hasher: PasswordHasher | None = None) -> FastAPI:
@@ -72,6 +76,14 @@ def create_app(settings: Settings | None = None, hasher: PasswordHasher | None =
     register_error_handlers(app)
     app.add_middleware(OriginCheckMiddleware, allowed_origin=resolved.public_origin)
     app.add_middleware(RequestIdMiddleware)
-    for router in (platform_router, identity_router, stores_router, membership_router):
+    routers = (
+        platform_router,
+        identity_router,
+        stores_router,
+        membership_router,
+        catalog_router,
+        discovery_router,
+    )
+    for router in routers:
         app.include_router(router)
     return app

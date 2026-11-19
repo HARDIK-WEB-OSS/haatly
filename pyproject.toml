@@ -160,10 +160,36 @@ allowed_importers = ["haatly.membership"]
 as_packages = true
 
 [[tool.importlinter.contracts]]
+name = "catalog layers"
+type = "layers"
+layers = ["haatly.catalog.public", "haatly.catalog.adapters", "haatly.catalog.app", "haatly.catalog.domain"]
+
+[[tool.importlinter.contracts]]
+name = "catalog internals are reachable only through catalog.public"
+type = "protected"
+protected_modules = ["haatly.catalog.domain", "haatly.catalog.app", "haatly.catalog.adapters"]
+allowed_importers = ["haatly.catalog"]
+as_packages = true
+
+[[tool.importlinter.contracts]]
+name = "discovery layers"
+type = "layers"
+layers = ["haatly.discovery.public", "haatly.discovery.adapters", "haatly.discovery.app", "haatly.discovery.domain"]
+
+[[tool.importlinter.contracts]]
+name = "discovery internals are reachable only through discovery.public"
+type = "protected"
+protected_modules = ["haatly.discovery.domain", "haatly.discovery.app", "haatly.discovery.adapters"]
+allowed_importers = ["haatly.discovery"]
+as_packages = true
+
+[[tool.importlinter.contracts]]
 name = "module dependency order"
 type = "layers"
 layers = [
     "haatly.main | haatly.worker",
+    "haatly.discovery",
+    "haatly.catalog",
     "haatly.membership",
     "haatly.stores",
     "haatly.identity | haatly.ledger",
@@ -180,6 +206,8 @@ forbidden_modules = [
     "haatly.identity.public",
     "haatly.stores.public",
     "haatly.membership.public",
+    "haatly.catalog.public",
+    "haatly.discovery.public",
 ]
 
 [[tool.importlinter.contracts]]

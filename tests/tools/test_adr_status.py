@@ -33,7 +33,7 @@ def commit_exists(sha: str) -> bool:
 
 
 def test_there_are_adrs_to_check() -> None:
-    assert len(ADRS) >= 15
+    assert len(ADRS) >= 16
 
 
 @pytest.mark.parametrize("path", ADRS, ids=lambda path: path.name[:4])

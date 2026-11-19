@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
     [Parameter(Position = 0)]
-    [ValidateSet('setup', 'env', 'up', 'down', 'migrate', 'migrate-roundtrip', 'test', 'lint', 'typecheck', 'audit', 'check', 'run-api', 'run-worker', 'smoke', 'hooks', 'make-admin')]
+    [ValidateSet('setup', 'env', 'up', 'down', 'migrate', 'migrate-roundtrip', 'test', 'lint', 'typecheck', 'audit', 'check', 'run-api', 'run-worker', 'smoke', 'hooks', 'make-admin', 'import-pins')]
     [string]$Task = 'check',
     [Parameter(ValueFromRemainingArguments = $true)]
     [string[]]$Rest = @()
@@ -154,6 +154,13 @@ function Test-BodyLimit {
     Write-Host "Smoke: 2 MB body -> $oversized from Caddy; 900 KB body -> $allowed from the API"
 }
 
+function Invoke-ImportPins {
+    if ($Rest.Count -ne 1) {
+        throw 'usage: ./tasks.ps1 import-pins <path to the data.gov.in pincode CSV>'
+    }
+    Invoke-Uv @('python', '-m', 'haatly.discovery.adapters.pin_import', $Rest[0])
+}
+
 function Invoke-Smoke {
     $env:API_UPSTREAM = 'api:8000'
     try {
@@ -189,4 +196,5 @@ switch ($Task) {
     'smoke' { Invoke-Smoke }
     'hooks' { Invoke-Hooks }
     'make-admin' { Invoke-MakeAdmin }
+    'import-pins' { Invoke-ImportPins }
 }

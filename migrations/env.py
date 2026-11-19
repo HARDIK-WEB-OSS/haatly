@@ -3,6 +3,8 @@ import asyncio
 from alembic import context
 from sqlalchemy import URL, Connection, MetaData
 
+from haatly.catalog.public import catalog_metadata
+from haatly.discovery.public import discovery_metadata
 from haatly.identity.public import identity_metadata
 from haatly.ledger.public import ledger_metadata
 from haatly.membership.public import membership_metadata
@@ -15,6 +17,8 @@ MODULE_METADATA: tuple[MetaData, ...] = (
     identity_metadata,
     stores_metadata,
     membership_metadata,
+    catalog_metadata,
+    discovery_metadata,
 )
 MANAGED_SCHEMAS = frozenset(metadata.schema for metadata in MODULE_METADATA)
 VERSION_TABLE_SCHEMA = "public"

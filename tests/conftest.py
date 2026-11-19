@@ -39,6 +39,12 @@ TEST_PASSWORDS = {
     "HAATLY_DB_OPS_PASSWORD": "test-ops",
 }
 TRUNCATED_TABLES = (
+    "discovery.store_locations",
+    "discovery.pin_codes",
+    "discovery.pin_imports",
+    "catalog.variant_prices",
+    "catalog.variants",
+    "catalog.products",
     "platform.jobs",
     "platform.outbox_events",
     "platform.processed_events",

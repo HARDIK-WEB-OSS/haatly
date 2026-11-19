@@ -27,7 +27,7 @@ Prerequisites: Docker Desktop, and uv (`winget install --id astral-sh.uv -e`).
 ./tasks.ps1 down
 ```
 
-Other tasks: `test`, `lint`, `typecheck`, `migrate-roundtrip`, `smoke`, `hooks`, `make-admin`.
+Other tasks: `test`, `lint`, `typecheck`, `migrate-roundtrip`, `smoke`, `hooks`, `make-admin`, `import-pins`.
 
 Working rules are in [`CONTRIBUTING.md`](CONTRIBUTING.md), and operational procedures in
 [`docs/runbook.md`](docs/runbook.md).

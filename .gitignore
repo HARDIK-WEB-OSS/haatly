@@ -15,4 +15,5 @@ dist/
 .tigerbeetle/
 coverage.xml
 coverage.json
+build/
 .hypothesis/
