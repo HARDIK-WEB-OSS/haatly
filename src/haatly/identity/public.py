@@ -1,3 +1,5 @@
+from haatly.identity.adapters.make_admin import main as make_admin_main
+from haatly.identity.adapters.make_admin import make_admin
 from haatly.identity.adapters.routes import (
     SESSION_COOKIE,
     PrincipalDep,
@@ -20,12 +22,15 @@ from haatly.identity.app.accounts import (
     RateLimitedError,
     context_of,
 )
+from haatly.identity.app.admins import AdminGrant, AdminGrants, UnknownUserError
 from haatly.identity.app.ports import EmailTakenError, PasswordHasher
 from haatly.identity.domain.model import Principal, Session, SessionPolicy, User, hash_token
 
 __all__ = [
     "SESSION_COOKIE",
     "Accounts",
+    "AdminGrant",
+    "AdminGrants",
     "Argon2idHasher",
     "EmailTakenError",
     "InvalidCredentialsError",
@@ -38,12 +43,15 @@ __all__ = [
     "SessionPolicy",
     "SqlIdentityUnitOfWork",
     "SqlIdentityUnitOfWorkFactory",
+    "UnknownUserError",
     "User",
     "accounts_of",
     "context_of",
     "hash_token",
     "identity_metadata",
     "identity_router",
+    "make_admin",
+    "make_admin_main",
     "optional_principal",
     "presented_token",
     "require_principal",

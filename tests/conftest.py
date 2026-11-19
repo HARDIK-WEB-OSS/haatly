@@ -91,6 +91,7 @@ def settings(postgres_container: DockerContainer) -> Settings:
         db_name=TEST_DATABASE,
         db_owner_password=SecretStr(TEST_PASSWORDS["HAATLY_DB_OWNER_PASSWORD"]),
         db_app_password=SecretStr(TEST_PASSWORDS["HAATLY_DB_APP_PASSWORD"]),
+        db_ops_password=SecretStr(TEST_PASSWORDS["HAATLY_DB_OPS_PASSWORD"]),
     )
 
 

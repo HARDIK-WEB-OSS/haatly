@@ -26,6 +26,7 @@ class Settings(BaseSettings):
     db_name: str = "haatly"
     db_owner_password: SecretStr
     db_app_password: SecretStr
+    db_ops_password: SecretStr | None = None
     public_origin: str = "https://localhost:8443"
     worker_idle_seconds: float = 5.0
 

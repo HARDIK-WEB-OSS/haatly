@@ -1,5 +1,6 @@
 from haatly.platform.adapters.database import (
     DbRole,
+    UnsupportedRuntimeRoleError,
     create_engine,
     database_url,
     is_unique_violation,
@@ -99,6 +100,7 @@ __all__ = [
     "TenantContext",
     "UnitOfWork",
     "UnitOfWorkFactory",
+    "UnsupportedRuntimeRoleError",
     "Uuid7Source",
     "Worker",
     "bounded",

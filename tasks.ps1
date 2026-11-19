@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
     [Parameter(Position = 0)]
-    [ValidateSet('setup', 'env', 'up', 'down', 'migrate', 'migrate-roundtrip', 'test', 'lint', 'typecheck', 'audit', 'check', 'run-api', 'run-worker', 'smoke', 'hooks')]
+    [ValidateSet('setup', 'env', 'up', 'down', 'migrate', 'migrate-roundtrip', 'test', 'lint', 'typecheck', 'audit', 'check', 'run-api', 'run-worker', 'smoke', 'hooks', 'make-admin')]
     [string]$Task = 'check',
     [Parameter(ValueFromRemainingArguments = $true)]
     [string[]]$Rest = @()
@@ -119,6 +119,13 @@ function Invoke-RunWorker {
     Invoke-Uv @('haatly-worker')
 }
 
+function Invoke-MakeAdmin {
+    if ($Rest.Count -ne 1) {
+        throw 'usage: ./tasks.ps1 make-admin <email>'
+    }
+    Invoke-Uv @('python', '-m', 'haatly.identity.adapters.make_admin', $Rest[0])
+}
+
 function Invoke-Smoke {
     $env:API_UPSTREAM = 'api:8000'
     try {
@@ -152,4 +159,5 @@ switch ($Task) {
     'run-worker' { Invoke-RunWorker }
     'smoke' { Invoke-Smoke }
     'hooks' { Invoke-Hooks }
+    'make-admin' { Invoke-MakeAdmin }
 }

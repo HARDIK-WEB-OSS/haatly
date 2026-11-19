@@ -59,6 +59,11 @@ class SqlUserRepository:
             .values(password_hash=password_hash, updated_at=now)
         )
 
+    async def set_admin(self, user_id: UUID, now: datetime) -> None:
+        await self.connection.execute(
+            update(users).where(users.c.id == user_id).values(is_admin=True, updated_at=now)
+        )
+
     async def emails(self, user_ids: Sequence[UUID]) -> Mapping[UUID, str]:
         statement = select(users.c.id, users.c.email).where(users.c.id.in_(user_ids))
         return {row.id: row.email for row in await self.connection.execute(statement)}

@@ -19,7 +19,7 @@ only; HTML pages come later.
   A successful login re-hashes when `check_needs_rehash` says the stored parameters are weaker
   than today's. Unknown emails still spend one Argon2 verification so timing does not reveal
   which emails have accounts.
-- Emails are trimmed, lower-cased and unique. Passwords are 10Ã¢â‚¬â€œ128 characters.
+- Emails are trimmed, lower-cased and unique. Passwords are 10ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Å“128 characters.
 - Sessions are opaque 256-bit tokens. Only their SHA-256 is stored. The cookie is
   `haatly_session`: `HttpOnly`, `Secure`, `SameSite=Lax`, `Path=/`.
 - A session dies after 24 h idle or 14 d after creation, whichever comes first. `last_seen_at`
@@ -59,6 +59,11 @@ Every request resolves to one `TenantContext`:
 | anyone else | `buyer`, with user |
 
 Admins are made by an operator with the audited `haatly_ops` role. There is no endpoint for it.
+`./tasks.ps1 make-admin <email>` (`haatly.identity.adapters.make_admin`) connects as `haatly_ops`,
+sets `is_admin` and appends an `identity.admin_granted` audit row in one transaction. Granting an
+existing admin changes nothing and writes nothing. `haatly_app` cannot do it, because it has no
+`UPDATE` grant on `is_admin`. The procedure is in `docs/runbook.md`. Before this task existed
+(review finding H3), a fresh deployment could only get an admin through hand-written SQL.
 
 ### Row-level security
 
@@ -100,10 +105,10 @@ Acceptance is one transaction:
 1. Present the token (sets the capability) and load the invitation.
 2. Refuse if it is closed, if the store is not active, if the user owns the store, is blocked or
    is already a full member.
-3. Claim it with a conditional `UPDATE Ã¢â‚¬Â¦ WHERE accepted_at IS NULL AND revoked_at IS NULL AND
+3. Claim it with a conditional `UPDATE ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ WHERE accepted_at IS NULL AND revoked_at IS NULL AND
    expires_at > now`. Of two simultaneous claims, the second waits on the row lock and then
    matches nothing, so it gets a 404.
-4. Upsert the membership `ON CONFLICT (store_id, user_id) DO UPDATE Ã¢â‚¬Â¦ WHERE` the existing row is
+4. Upsert the membership `ON CONFLICT (store_id, user_id) DO UPDATE ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ WHERE` the existing row is
    neither blocked nor already a full member. If one user accepts two invitations at once, the
    second waits on the unique index, then updates nothing and gets a 409. The transaction rolls
    back, so its invitation is not burned.

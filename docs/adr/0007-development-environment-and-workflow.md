@@ -22,7 +22,8 @@ marker, so it could not be installed on Windows at all (audit F-15). v1 also had
   Caddy.
 - Every dev command goes through `tasks.ps1`: `setup`, `env`, `up`, `down`, `migrate`,
   `migrate-roundtrip`, `test`, `lint`, `typecheck`, `audit`, `check`, `run-api`, `run-worker`,
-  `smoke`, `hooks`. CI runs the same tasks under `pwsh` on Ubuntu, so local and CI gates cannot drift.
+  `smoke`, `hooks`, and the operator task `make-admin`. CI runs the same tasks under `pwsh` on
+  Ubuntu, so local and CI gates cannot drift.
 - `setup` writes `.env` with fresh random passwords, so no real-looking secret is ever committed.
 - Files used inside containers are LF via `.gitattributes`. `*.ps1` files are CRLF.
 - Paths are built with `pathlib`. No hardcoded separators.

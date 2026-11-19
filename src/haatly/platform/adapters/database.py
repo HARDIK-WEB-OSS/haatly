@@ -30,7 +30,11 @@ def module_metadata(schema: str) -> MetaData:
 
 
 def database_url(settings: Settings, role: DbRole) -> URL:
-    passwords = {DbRole.OWNER: settings.db_owner_password, DbRole.APP: settings.db_app_password}
+    passwords = {
+        DbRole.OWNER: settings.db_owner_password,
+        DbRole.APP: settings.db_app_password,
+        DbRole.OPS: settings.db_ops_password,
+    }
     password = passwords.get(role)
     if password is None:
         raise UnsupportedRuntimeRoleError(role)
