@@ -1,4 +1,5 @@
 from enum import StrEnum
+from ipaddress import ip_network
 from typing import Self
 
 from pydantic import SecretStr, model_validator
@@ -17,6 +18,10 @@ class InsecureProductionSettingsError(ValueError):
     pass
 
 
+class InvalidTrustedProxyError(ValueError):
+    pass
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="HAATLY_", env_file=".env", extra="ignore")
 
@@ -29,6 +34,20 @@ class Settings(BaseSettings):
     db_ops_password: SecretStr | None = None
     public_origin: str = "https://localhost:8443"
     worker_idle_seconds: float = 5.0
+    trusted_proxies: str = ""
+
+    @property
+    def trusted_proxy_list(self) -> list[str]:
+        return [entry.strip() for entry in self.trusted_proxies.split(",") if entry.strip()]
+
+    @model_validator(mode="after")
+    def check_trusted_proxies(self) -> Self:
+        for entry in self.trusted_proxy_list:
+            try:
+                ip_network(entry, strict=False)
+            except ValueError as error:
+                raise InvalidTrustedProxyError(f"not an IP address or network: {entry}") from error
+        return self
 
     @model_validator(mode="after")
     def refuse_weak_production_secrets(self) -> Self:
@@ -39,4 +58,6 @@ class Settings(BaseSettings):
                 raise InsecureProductionSettingsError("production secrets are too short")
         if not self.public_origin.startswith("https://"):
             raise InsecureProductionSettingsError("production origin must be https")
+        if not self.trusted_proxy_list:
+            raise InsecureProductionSettingsError("production needs HAATLY_TRUSTED_PROXIES")
         return self

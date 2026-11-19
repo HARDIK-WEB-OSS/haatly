@@ -20,7 +20,12 @@ from haatly.platform.adapters.http import (
 from haatly.platform.adapters.postgres_signals import PgLeaderLock, PgWakeup
 from haatly.platform.adapters.routes import router
 from haatly.platform.adapters.runtime import SystemClock, Uuid7Source, unit_random
-from haatly.platform.adapters.settings import Environment, Settings
+from haatly.platform.adapters.settings import (
+    Environment,
+    InsecureProductionSettingsError,
+    InvalidTrustedProxyError,
+    Settings,
+)
 from haatly.platform.adapters.tables import metadata as platform_metadata
 from haatly.platform.adapters.unit_of_work import SqlUnitOfWork, SqlUnitOfWorkFactory
 from haatly.platform.app.audit import RateLimiter, record_audit
@@ -69,7 +74,9 @@ __all__ = [
     "IdSource",
     "IdempotencyGate",
     "InFlight",
+    "InsecureProductionSettingsError",
     "InvalidIdempotencyKeyError",
+    "InvalidTrustedProxyError",
     "Job",
     "JobHandler",
     "JobRunner",

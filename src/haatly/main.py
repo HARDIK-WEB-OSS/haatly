@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from sqlalchemy.ext.asyncio import AsyncEngine
+from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
 from haatly.catalog.public import Catalog, SqlCatalogUnitOfWorkFactory, catalog_router
 from haatly.discovery.public import Discovery, SqlDiscoveryUnitOfWorkFactory, discovery_router
@@ -76,6 +77,8 @@ def create_app(settings: Settings | None = None, hasher: PasswordHasher | None =
     register_error_handlers(app)
     app.add_middleware(OriginCheckMiddleware, allowed_origin=resolved.public_origin)
     app.add_middleware(RequestIdMiddleware)
+    if resolved.trusted_proxy_list:
+        app.add_middleware(ProxyHeadersMiddleware, trusted_hosts=resolved.trusted_proxy_list)
     routers = (
         platform_router,
         identity_router,

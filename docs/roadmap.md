@@ -62,6 +62,8 @@ proposed deploying before checkout; that plan was not adopted, and the milestone
   development-only and production uses forward fixes.
 - **L10 slow suite.** Run the generated suites in their own CI job, in parallel, and mark the
   latency test as slow.
+- **Trusted proxy.** The production compose sets `HAATLY_TRUSTED_PROXIES` to the production Caddy's
+  address only; the API refuses to start in production without it (ADR 0015).
 - Already planned for M7: production compose and real domain, WAL-G point-in-time recovery and the
   restore drill (ADR 0012), k6 and Playwright, and the custom seccomp profile that replaces
   `seccomp:unconfined` (ADR 0014).

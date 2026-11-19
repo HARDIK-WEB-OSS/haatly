@@ -41,8 +41,14 @@ only; HTML pages come later.
   the platform's `RateLimitedError`, which the HTTP layer turns into one 429 response with
   `Retry-After`.
 - **The client IP behind Caddy.** The limits above are keyed on the real client IP. Behind Caddy,
-  the TCP peer is Caddy, so uvicorn runs with `--proxy-headers --forwarded-allow-ips
-  172.30.53.2`. That is Caddy's fixed address on the `edge` network (172.30.53.0/24). Only `caddy`
+  the TCP peer is Caddy. The addresses whose `X-Forwarded-For` is believed come from
+  configuration, `HAATLY_TRUSTED_PROXIES` (a comma-separated list of IP addresses or networks),
+  and the app installs uvicorn's `ProxyHeadersMiddleware` with exactly that list. Uvicorn itself
+  runs with `--no-proxy-headers`, so there is one place that decides. An entry that is not an
+  address or network is refused at start, and production refuses to start with the list empty;
+  in development an empty list means the TCP peer is the client. Compose sets it to
+  172.30.53.2, Caddy's fixed address on the `edge` network (172.30.53.0/24), and the production
+  compose (M7) must set it the same way. Only `caddy`
   and `api` are on `edge`, Caddy is on no other network, and other containers get addresses from
   172.30.53.128/25 only, so Caddy is the only peer whose `X-Forwarded-For` is believed. The network
   gateway (172.30.53.1) is deliberately not trusted, so a process on the host cannot forge the
@@ -52,7 +58,7 @@ only; HTML pages come later.
   Until this was fixed (review finding H1, 2026-11-18), every login looked like it came from Caddy,
   so the per-IP limit was one global bucket and the (email, IP) limit locked accounts out.
   `tests/identity/integration/test_client_ip_behind_proxy.py` reads the resolved compose
-  configuration and drives the app through uvicorn's proxy middleware with exactly those settings.
+  configuration and builds the app with exactly that setting.
 
 ### Who the caller is
 

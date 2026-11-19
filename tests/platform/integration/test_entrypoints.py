@@ -45,6 +45,7 @@ def production_settings(**overrides: object) -> Settings:
         "db_owner_password": SecretStr("o" * 32),
         "db_app_password": SecretStr("a" * 32),
         "public_origin": "https://haatly.example",
+        "trusted_proxies": "172.30.53.2",
     }
     return Settings.model_validate(values | overrides)
 
@@ -60,11 +61,28 @@ async def test_production_hides_interactive_docs() -> None:
     [
         ({"db_app_password": SecretStr("short")}, "production secrets are too short"),
         ({"public_origin": "http://haatly.example"}, "production origin must be https"),
+        ({"trusted_proxies": ""}, "production needs HAATLY_TRUSTED_PROXIES"),
+        ({"trusted_proxies": " , "}, "production needs HAATLY_TRUSTED_PROXIES"),
     ],
 )
 def test_production_refuses_weak_settings(overrides: dict[str, object], reason: str) -> None:
     with pytest.raises(ValidationError, match=reason):
         production_settings(**overrides)
+
+
+def test_the_api_refuses_to_start_in_production_without_trusted_proxies(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    for name, value in {
+        "HAATLY_ENVIRONMENT": "production",
+        "HAATLY_DB_OWNER_PASSWORD": "o" * 32,
+        "HAATLY_DB_APP_PASSWORD": "a" * 32,
+        "HAATLY_PUBLIC_ORIGIN": "https://haatly.example",
+        "HAATLY_TRUSTED_PROXIES": "",
+    }.items():
+        monkeypatch.setenv(name, value)
+    with pytest.raises(ValidationError, match="production needs HAATLY_TRUSTED_PROXIES"):
+        create_app()
 
 
 async def test_worker_runs_until_stopped(

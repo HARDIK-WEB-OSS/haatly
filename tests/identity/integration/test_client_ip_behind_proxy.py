@@ -10,8 +10,8 @@ from typing import Any
 
 import httpx
 import pytest
+from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncEngine
-from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
 from haatly.main import create_app
 from haatly.platform.public import Settings
@@ -35,7 +35,7 @@ VICTIM = "203.0.113.77"
 @pytest.fixture(scope="module")
 def compose(tmp_path_factory: pytest.TempPathFactory) -> dict[str, Any]:
     empty_env = tmp_path_factory.mktemp("compose") / "empty.env"
-    empty_env.write_text("")
+    empty_env.write_text("", encoding="utf-8")
     docker = shutil.which("docker")
     assert docker is not None
     arguments = ["--env-file", str(empty_env), "--profile", "app", "config", "--format", "json"]
@@ -52,9 +52,10 @@ def compose(tmp_path_factory: pytest.TempPathFactory) -> dict[str, Any]:
 
 
 def trusted_proxies(compose: dict[str, Any]) -> str:
-    command: list[str] = compose["services"]["api"]["command"]
-    assert "--proxy-headers" in command
-    return command[command.index("--forwarded-allow-ips") + 1]
+    api = compose["services"]["api"]
+    assert "--no-proxy-headers" in api["command"]
+    value: str = api["environment"]["HAATLY_TRUSTED_PROXIES"]
+    return value
 
 
 @dataclass
@@ -83,8 +84,8 @@ class Edge:
 async def edge(
     migrated: Settings, app_engine: AsyncEngine, compose: dict[str, Any]
 ) -> AsyncIterator[Edge]:
-    app = create_app(migrated)
-    app.add_middleware(ProxyHeadersMiddleware, trusted_hosts=trusted_proxies(compose))
+    configured = migrated.model_copy(update={"trusted_proxies": trusted_proxies(compose)})
+    app = create_app(configured)
     try:
         yield Edge(app, migrated.public_origin)
     finally:
@@ -141,3 +142,26 @@ async def test_bad_logins_from_one_ip_do_not_lock_the_victim_out(edge: Edge) -> 
     assert (await edge.login(email, "wrong-password", CADDY, ATTACKER)).status_code == 429
     victim = await edge.login(email, PASSWORD, CADDY, VICTIM)
     assert victim.status_code == 200, victim.text
+
+
+@pytest.mark.parametrize("value", ["caddy", "172.30.53.300", "10.0.0.0/33", "172.30.53.2,nope"])
+def test_trusted_proxies_must_be_addresses_or_networks(value: str) -> None:
+    with pytest.raises(ValidationError, match="not an IP address or network"):
+        Settings.model_validate(
+            {"db_owner_password": "x", "db_app_password": "x", "trusted_proxies": value}
+        )
+
+
+async def test_without_trusted_proxies_forwarded_for_is_never_believed(
+    migrated: Settings, app_engine: AsyncEngine
+) -> None:
+    app = create_app(migrated.model_copy(update={"trusted_proxies": ""}))
+    try:
+        edge = Edge(app, migrated.public_origin)
+        email = await registered(edge)
+        for attempt in range(10):
+            response = await edge.login(email, "wrong-password", CADDY, f"192.0.2.{attempt + 10}")
+            assert response.status_code == 401
+        assert (await edge.login(email, PASSWORD, CADDY, VICTIM)).status_code == 429
+    finally:
+        await app.state.engine.dispose()

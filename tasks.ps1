@@ -112,7 +112,7 @@ function Invoke-Check {
 }
 
 function Invoke-RunApi {
-    Invoke-Uv @('uvicorn', '--factory', 'haatly.main:create_app', '--reload', '--host', '127.0.0.1', '--port', '8000')
+    Invoke-Uv @('uvicorn', '--factory', 'haatly.main:create_app', '--reload', '--host', '127.0.0.1', '--port', '8000', '--no-proxy-headers')
 }
 
 function Invoke-RunWorker {

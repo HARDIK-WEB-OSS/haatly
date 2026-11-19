@@ -23,4 +23,4 @@ ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONUNBUFFERED=1
 USER 10001:10001
 EXPOSE 8000
-CMD ["uvicorn", "--factory", "haatly.main:create_app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "--factory", "haatly.main:create_app", "--host", "0.0.0.0", "--port", "8000", "--no-proxy-headers"]
