@@ -44,10 +44,13 @@ marker, so it could not be installed on Windows at all (audit F-15). v1 also had
 
 ### Workflow
 
-- Work lands on `main`. There are no milestone branches and no pull requests.
-- The project owner runs every git write: staging, committing and pushing. An automated agent
-  only edits files. When a change is green locally, it hands over the exact `git add` and
-  `git commit` commands. A red CI run is fixed in the files and handed over again.
+- Work is committed on a local `main`. There are no milestone branches, no pull requests and no
+  merges.
+- Contributors commit locally but never push. When work is committed and green, they say
+  "READY TO PUSH" and stop. The owner pushes and reports the CI result, and a red CI run is fixed
+  with a new local commit. This reverses the 2026-11-18 rule (commit `c43fc7d`) under which only
+  the owner committed.
+- The full working rules are in `CONTRIBUTING.md` at the repository root.
 - Conventional Commits, one logical change per commit. Every check is green before each commit.
 - **Money-path tests come first.** The failing run (the red output) is recorded in the milestone
   report. The test and its implementation are then committed together, so every commit stays green.
