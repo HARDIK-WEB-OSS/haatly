@@ -3,11 +3,15 @@ from uuid import UUID
 
 from sqlalchemy import ColumnElement, Row, and_, or_, select, update
 from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncConnection
 
+from haatly.platform.adapters.database import is_unique_violation
 from haatly.platform.adapters.tables import jobs
 from haatly.platform.app.ports import DeadJob
 from haatly.platform.domain.jobs import Job, JobStatus, NewJob
+
+DEDUPE_CONSTRAINT = "uq_jobs_dedupe_key"
 
 
 def job_from_row(row: Row[tuple[UUID, str, dict[str, object], int, int]]) -> Job:
@@ -31,24 +35,26 @@ class SqlJobRepository:
         self.connection = connection
 
     async def enqueue(self, job_id: UUID, job: NewJob, now: datetime) -> bool:
-        statement = (
-            insert(jobs)
-            .values(
-                id=job_id,
-                kind=job.kind,
-                payload=dict(job.payload),
-                dedupe_key=job.dedupe_key,
-                status=JobStatus.QUEUED,
-                attempts=0,
-                max_attempts=job.max_attempts,
-                run_after=now + job.delay,
-                created_at=now,
-                updated_at=now,
-            )
-            .on_conflict_do_nothing(index_elements=[jobs.c.dedupe_key])
-            .returning(jobs.c.id)
+        statement = insert(jobs).values(
+            id=job_id,
+            kind=job.kind,
+            payload=dict(job.payload),
+            dedupe_key=job.dedupe_key,
+            status=JobStatus.QUEUED,
+            attempts=0,
+            max_attempts=job.max_attempts,
+            run_after=now + job.delay,
+            created_at=now,
+            updated_at=now,
         )
-        return (await self.connection.execute(statement)).first() is not None
+        try:
+            async with self.connection.begin_nested():
+                await self.connection.execute(statement)
+        except IntegrityError as error:
+            if is_unique_violation(error, DEDUPE_CONSTRAINT):
+                return False
+            raise
+        return True
 
     async def claim(self, now: datetime, lease: timedelta, limit: int) -> list[Job]:
         ready = or_(

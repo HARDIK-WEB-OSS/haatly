@@ -5,6 +5,7 @@ from haatly.platform.app.ports import UnitOfWorkFactory
 from haatly.platform.domain.clock import Clock
 from haatly.platform.domain.idempotency import (
     Decision,
+    NewRequest,
     Proceed,
     StoredResponse,
     decide,
@@ -39,7 +40,8 @@ class IdempotencyGate:
             now = self.clock.now()
             decision = decide(await uow.idempotency.find(scope, key), incoming, now)
             if isinstance(decision, Proceed):
-                await uow.idempotency.start(scope, key, incoming, now + self.lease, now)
+                request = NewRequest(scope, key, incoming, now + self.lease, now)
+                await uow.idempotency.start(context, request)
         return decision
 
     async def complete(

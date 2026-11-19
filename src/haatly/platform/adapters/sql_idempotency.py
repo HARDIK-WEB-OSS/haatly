@@ -5,7 +5,13 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncConnection
 
 from haatly.platform.adapters.tables import idempotency_keys
-from haatly.platform.domain.idempotency import IdempotencyState, StoredRequest, StoredResponse
+from haatly.platform.domain.idempotency import (
+    IdempotencyState,
+    NewRequest,
+    StoredRequest,
+    StoredResponse,
+)
+from haatly.platform.domain.tenancy import TenantContext
 
 LOCK_SEPARATOR = "\x1f"
 
@@ -38,18 +44,24 @@ class SqlIdempotencyRepository:
             row.request_hash, IdempotencyState(row.state), row.lease_expires_at, response
         )
 
-    async def start(
-        self, scope: str, key: str, request_hash: str, lease_expires_at: datetime, now: datetime
-    ) -> None:
+    async def start(self, owner: TenantContext, request: NewRequest) -> None:
         values = {
-            "request_hash": request_hash,
+            "request_hash": request.request_hash,
             "state": IdempotencyState.IN_PROGRESS,
-            "lease_expires_at": lease_expires_at,
+            "lease_expires_at": request.lease_expires_at,
             "response_status": None,
             "response_body": None,
             "completed_at": None,
         }
-        statement = insert(idempotency_keys).values(scope=scope, key=key, created_at=now, **values)
+        statement = insert(idempotency_keys).values(
+            scope=request.scope,
+            key=request.key,
+            created_at=request.now,
+            actor_role=owner.role.value,
+            user_id=owner.user_id,
+            store_id=owner.store_id,
+            **values,
+        )
         await self.connection.execute(
             statement.on_conflict_do_update(
                 index_elements=[idempotency_keys.c.scope, idempotency_keys.c.key], set_=values

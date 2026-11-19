@@ -40,7 +40,8 @@ def scheduler(
 
 
 async def job_count(engine: AsyncEngine) -> object:
-    async with engine.connect() as connection:
+    async with engine.begin() as connection:
+        await connection.execute(text("SELECT set_config('app.role', 'system', true)"))
         return (await connection.execute(text("SELECT count(*) FROM platform.jobs"))).scalar()
 
 

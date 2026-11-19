@@ -7,7 +7,7 @@ from uuid import UUID
 
 from haatly.platform.domain.audit import AuditEntry
 from haatly.platform.domain.events import OutboxEvent
-from haatly.platform.domain.idempotency import StoredRequest, StoredResponse
+from haatly.platform.domain.idempotency import NewRequest, StoredRequest, StoredResponse
 from haatly.platform.domain.jobs import Job, NewJob
 from haatly.platform.domain.tenancy import TenantContext
 
@@ -58,9 +58,7 @@ class IdempotencyRepository(Protocol):
 
     async def find(self, scope: str, key: str) -> StoredRequest | None: ...
 
-    async def start(
-        self, scope: str, key: str, request_hash: str, lease_expires_at: datetime, now: datetime
-    ) -> None: ...
+    async def start(self, owner: TenantContext, request: NewRequest) -> None: ...
 
     async def complete(
         self, scope: str, key: str, response: StoredResponse, now: datetime

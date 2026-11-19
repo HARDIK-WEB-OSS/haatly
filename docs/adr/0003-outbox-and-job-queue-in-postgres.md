@@ -61,6 +61,23 @@ a Postgres transaction.
 All timestamps come from the injected clock and are passed as parameters. No `now()` defaults in
 SQL.
 
+### Row-level security (added before M4)
+
+Event payloads and job payloads will carry tenant data from M4, so the tables are not left open
+to every query the app role runs (review finding M4). Migration 0007 puts `FORCE ROW LEVEL
+SECURITY` on `outbox_events`, `jobs` and `processed_events`.
+
+- **Append from any context.** A use case running as a buyer or seller must be able to record an
+  event or enqueue a job in its own transaction. `outbox_events` and `jobs` therefore have an
+  `INSERT` policy for any real actor role. A transaction with no context gets nothing.
+- **Everything else is `system` only.** Reading, claiming, marking, rescheduling and deleting are
+  allowed only to `system`, which is the worker. A tenant that appends a job cannot read it back,
+  change it or delete it. `processed_events` is `system` only for every command.
+- **Deduplication without reading.** Postgres checks the read policy for `INSERT … ON CONFLICT`,
+  even `DO NOTHING`, so a tenant could not use it. `enqueue` inserts inside a savepoint instead.
+  A unique violation on `uq_jobs_dedupe_key` rolls the savepoint back and reports "already queued",
+  and any other error is raised.
+
 ## Consequences
 
 - One Postgres is the queue. Throughput is bounded by Postgres, which is ample for this product.

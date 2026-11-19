@@ -47,7 +47,8 @@ async def claim(uow_factory: SqlUnitOfWorkFactory, clock: FrozenClock, limit: in
 
 
 async def status_counts(engine: AsyncEngine) -> Counter[str]:
-    async with engine.connect() as connection:
+    async with engine.begin() as connection:
+        await connection.execute(text("SELECT set_config('app.role', 'system', true)"))
         rows = await connection.execute(text("SELECT status FROM platform.jobs"))
         return Counter(row.status for row in rows)
 

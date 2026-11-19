@@ -24,6 +24,15 @@ class StoredRequest:
 
 
 @dataclass(frozen=True)
+class NewRequest:
+    scope: str
+    key: str
+    request_hash: str
+    lease_expires_at: datetime
+    now: datetime
+
+
+@dataclass(frozen=True)
 class Proceed:
     pass
 
