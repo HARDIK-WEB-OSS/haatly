@@ -11,6 +11,8 @@ from starlette.datastructures import Headers, MutableHeaders
 from starlette.exceptions import HTTPException
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
+from haatly.platform.domain.rate_limits import RateLimitedError
+
 logger = logging.getLogger("haatly.http")
 
 UNSAFE_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
@@ -73,6 +75,11 @@ def register_error_handlers(app: FastAPI) -> None:
     @app.exception_handler(ApiError)
     async def on_api_error(request: Request, error: ApiError) -> JSONResponse:
         return error_response(request, error.status, error.code, error.message, error.headers)
+
+    @app.exception_handler(RateLimitedError)
+    async def on_rate_limited(request: Request, error: RateLimitedError) -> JSONResponse:
+        headers = {"Retry-After": str(error.retry_after_seconds)}
+        return error_response(request, 429, "rate_limited", "too many attempts", headers)
 
     @app.exception_handler(HTTPException)
     async def on_http_error(request: Request, error: HTTPException) -> JSONResponse:

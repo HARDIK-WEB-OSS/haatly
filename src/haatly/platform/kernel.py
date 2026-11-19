@@ -13,7 +13,7 @@ from haatly.platform.domain.audit import AuditAction
 from haatly.platform.domain.clock import Clock
 from haatly.platform.domain.events import NewEvent, OutboxEvent
 from haatly.platform.domain.jobs import Job, JsonObject, NewJob
-from haatly.platform.domain.rate_limits import RateDecision, RateLimitRule
+from haatly.platform.domain.rate_limits import RateDecision, RateLimitedError, RateLimitRule
 from haatly.platform.domain.tenancy import PUBLIC, SYSTEM, ActorRole, TenantContext
 
 __all__ = [
@@ -33,6 +33,7 @@ __all__ = [
     "PeriodicTask",
     "RateDecision",
     "RateLimitRule",
+    "RateLimitedError",
     "RateLimiter",
     "TenantContext",
     "UnitOfWork",

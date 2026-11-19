@@ -31,16 +31,11 @@ from haatly.platform.kernel import (
 
 LOGIN_PER_IP = RateLimitRule("login.ip", 50, timedelta(minutes=15))
 LOGIN_PER_EMAIL_AND_IP = RateLimitRule("login.email_ip", 10, timedelta(minutes=15))
+REGISTER_PER_IP = RateLimitRule("register.ip", 10, timedelta(hours=1))
 
 
 class InvalidCredentialsError(Exception):
     pass
-
-
-class RateLimitedError(Exception):
-    def __init__(self, retry_after_seconds: int) -> None:
-        super().__init__(retry_after_seconds)
-        self.retry_after_seconds = retry_after_seconds
 
 
 @dataclass(frozen=True)
@@ -70,7 +65,8 @@ class Accounts:
         await uow.sessions.add(Session(self.ids.new_id(), user_id, hash_token(token), now, now))
         return token
 
-    async def register(self, raw_email: str, password: str) -> SignedIn:
+    async def register(self, raw_email: str, password: str, client_ip: str) -> SignedIn:
+        await self.limiter.enforce(REGISTER_PER_IP, client_ip)
         email = normalize_email(raw_email)
         password_hash = await self.hasher.hash(check_password(password))
         user = User(self.ids.new_id(), email, password_hash, False, self.clock.now())
@@ -82,13 +78,8 @@ class Accounts:
         return SignedIn(user, token)
 
     async def check_rate(self, email: str, client_ip: str) -> None:
-        for rule, subject in (
-            (LOGIN_PER_IP, client_ip),
-            (LOGIN_PER_EMAIL_AND_IP, f"{email}|{client_ip}"),
-        ):
-            decision = await self.limiter.hit(rule, subject)
-            if not decision.allowed:
-                raise RateLimitedError(decision.retry_after_seconds)
+        await self.limiter.enforce(LOGIN_PER_IP, client_ip)
+        await self.limiter.enforce(LOGIN_PER_EMAIL_AND_IP, f"{email}|{client_ip}")
 
     async def authenticate(self, email: str, password: str) -> User:
         async with self.uow_factory(SYSTEM) as uow:

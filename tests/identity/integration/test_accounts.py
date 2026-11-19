@@ -12,11 +12,16 @@ from haatly.identity.public import (
     Accounts,
     Argon2idHasher,
     InvalidCredentialsError,
-    RateLimitedError,
     SecretTokens,
     SqlIdentityUnitOfWorkFactory,
 )
-from haatly.platform.public import FrozenClock, RateLimiter, SqlUnitOfWorkFactory, Uuid7Source
+from haatly.platform.public import (
+    FrozenClock,
+    RateLimitedError,
+    RateLimiter,
+    SqlUnitOfWorkFactory,
+    Uuid7Source,
+)
 from tests.world import PASSWORD, Api, unique
 
 pytestmark = pytest.mark.anyio
@@ -156,7 +161,7 @@ async def test_login_rehashes_a_hash_made_with_weaker_parameters(
     clock = FrozenClock()
     weak = Argon2idHasher(PasswordHasher(time_cost=1, memory_cost=8192, type=Type.ID))
     email = new_email()
-    await accounts(app_engine, clock, weak).register(email, PASSWORD)
+    await accounts(app_engine, clock, weak).register(email, PASSWORD, "10.0.0.9")
     old_hash = await stored_hash(app_engine, email)
     strong = Argon2idHasher()
     assert strong.needs_rehash(old_hash)
@@ -173,7 +178,7 @@ async def test_login_limits_apply_per_email_and_ip_without_locking_the_account(
     clock = FrozenClock()
     service = accounts(app_engine, clock)
     email = new_email()
-    await service.register(email, PASSWORD)
+    await service.register(email, PASSWORD, "10.0.0.9")
     for _ in range(10):
         with pytest.raises(InvalidCredentialsError):
             await service.login(email, "wrong-password", "10.0.0.1", None)
@@ -205,14 +210,14 @@ async def test_sessions_expire_after_idling_and_at_their_absolute_limit(
 ) -> None:
     clock = FrozenClock()
     service = accounts(app_engine, clock)
-    signed_in = await service.register(new_email(), PASSWORD)
+    signed_in = await service.register(new_email(), PASSWORD, "10.0.0.9")
     clock.advance(timedelta(hours=23))
     assert await service.resolve(signed_in.token) is not None
     clock.advance(timedelta(hours=23))
     assert await service.resolve(signed_in.token) is not None
     clock.advance(timedelta(hours=24, seconds=1))
     assert await service.resolve(signed_in.token) is None
-    busy = await service.register(new_email(), PASSWORD)
+    busy = await service.register(new_email(), PASSWORD, "10.0.0.9")
     for _ in range(14):
         assert await service.resolve(busy.token) is not None
         clock.advance(timedelta(hours=23))
@@ -239,7 +244,7 @@ class CrashingTokens(SecretTokens):
 
 
 async def two_sessions(service: Accounts, email: str) -> tuple[str, str]:
-    first = (await service.register(email, PASSWORD)).token
+    first = (await service.register(email, PASSWORD, "10.0.0.9")).token
     second = (await service.login(email, PASSWORD, "10.0.0.1", None)).token
     return first, second
 
@@ -289,3 +294,28 @@ async def test_a_crash_before_the_new_session_leaves_the_old_password_and_sessio
         await service.change_password(principal, PASSWORD, "a-much-better-passphrase")
     tokens_source.armed = False
     await assert_nothing_changed(service, app_engine, email, old_hash, tokens)
+
+
+async def test_registration_is_limited_to_ten_an_hour_per_ip(app_engine: AsyncEngine) -> None:
+    clock = FrozenClock()
+    service = accounts(app_engine, clock)
+    for _ in range(10):
+        await service.register(new_email(), PASSWORD, "10.0.0.1")
+    with pytest.raises(RateLimitedError) as limited:
+        await service.register(new_email(), PASSWORD, "10.0.0.1")
+    assert 0 < limited.value.retry_after_seconds <= 3600
+    assert (await service.register(new_email(), PASSWORD, "10.0.0.2")).user.email
+    clock.advance(timedelta(hours=1))
+    assert (await service.register(new_email(), PASSWORD, "10.0.0.1")).user.email
+
+
+async def test_a_refused_registration_still_counts_towards_the_limit(api: Api) -> None:
+    taken = new_email()
+    await register(api, taken)
+    body = {"email": taken, "password": PASSWORD}
+    statuses = [(await api.call("POST", "/auth/register", json=body)).status_code for _ in range(9)]
+    assert statuses == [409] * 9
+    limited = await api.call("POST", "/auth/register", json=body | {"email": new_email()})
+    assert limited.status_code == 429
+    assert limited.json()["error"]["code"] == "rate_limited"
+    assert int(limited.headers["retry-after"]) > 0

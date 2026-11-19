@@ -192,3 +192,34 @@ async def test_rls_hides_other_stores_memberships_even_from_direct_queries(
     async with factory(TenantContext(ActorRole.BUYER, stranger.user_id)) as uow:
         assert buyer.user_id is not None
         assert await uow.memberships.for_user(buyer.user_id) == []
+
+
+async def test_join_requests_are_limited_to_twenty_an_hour_per_user(
+    api: Api, seeder: Seeder
+) -> None:
+    _, store_id = await live_store_with_owner(seeder)
+    buyer = await seeder.user("eager")
+    path = f"/stores/{store_id}/join"
+    statuses = [(await api.call("POST", path, token=buyer.token)).status_code for _ in range(20)]
+    assert statuses == [201] * 20
+    limited = await api.call("POST", path, token=buyer.token)
+    assert limited.status_code == 429
+    assert int(limited.headers["retry-after"]) > 0
+    other = await seeder.user("patient")
+    assert (await api.call("POST", path, token=other.token)).status_code == 201
+
+
+async def test_invitations_are_limited_to_fifty_a_day_per_store(api: Api, seeder: Seeder) -> None:
+    owner, _ = await live_store_with_owner(seeder)
+    body = {"label": "batch"}
+    for _ in range(50):
+        issued = await api.call("POST", "/seller/invitations", token=owner.token, json=body)
+        assert issued.status_code == 201
+    limited = await api.call("POST", "/seller/invitations", token=owner.token, json=body)
+    assert limited.status_code == 429
+    assert int(limited.headers["retry-after"]) <= 86400
+    listed = await api.call("GET", "/seller/invitations", token=owner.token)
+    assert len(listed.json()) == 50
+    other_owner, _ = await live_store_with_owner(seeder)
+    other = await api.call("POST", "/seller/invitations", token=other_owner.token, json=body)
+    assert other.status_code == 201

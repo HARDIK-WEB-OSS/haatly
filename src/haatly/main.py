@@ -44,7 +44,9 @@ def attach_services(app: FastAPI, engine: AsyncEngine, hasher: PasswordHasher) -
         SqlIdentityUnitOfWorkFactory(engine), hasher, tokens, limiter, ids, clock
     )
     app.state.stores = Stores(SqlStoresUnitOfWorkFactory(engine), ids, clock)
-    app.state.memberships = Memberships(SqlMembershipUnitOfWorkFactory(engine), tokens, ids, clock)
+    app.state.memberships = Memberships(
+        SqlMembershipUnitOfWorkFactory(engine), tokens, ids, clock, limiter
+    )
 
 
 def create_app(settings: Settings | None = None, hasher: PasswordHasher | None = None) -> FastAPI:

@@ -18,6 +18,12 @@ class RateLimitRule:
         return f"{self.name}:{subject}"
 
 
+class RateLimitedError(Exception):
+    def __init__(self, retry_after_seconds: int) -> None:
+        super().__init__(retry_after_seconds)
+        self.retry_after_seconds = retry_after_seconds
+
+
 @dataclass(frozen=True)
 class RateDecision:
     allowed: bool

@@ -1,6 +1,7 @@
 import hashlib
 from collections.abc import Sequence
 from dataclasses import dataclass
+from datetime import timedelta
 from uuid import UUID
 
 from haatly.membership.app.ports import (
@@ -15,7 +16,17 @@ from haatly.membership.domain.model import (
     MembershipStatus,
     invitation_lifetime,
 )
-from haatly.platform.kernel import ActorRole, Clock, IdSource, TenantContext
+from haatly.platform.kernel import (
+    ActorRole,
+    Clock,
+    IdSource,
+    RateLimiter,
+    RateLimitRule,
+    TenantContext,
+)
+
+JOIN_PER_USER = RateLimitRule("join.user", 20, timedelta(hours=1))
+INVITE_PER_STORE = RateLimitRule("invite.store", 50, timedelta(days=1))
 
 
 class MembershipNotFoundError(LookupError):
@@ -62,6 +73,7 @@ class Memberships:
     tokens: TokenGenerator
     ids: IdSource
     clock: Clock
+    limiter: RateLimiter
 
     def new_membership(
         self, store_id: UUID, user_id: UUID, level: MembershipLevel, status: MembershipStatus
@@ -70,6 +82,7 @@ class Memberships:
 
     async def request_join(self, context: TenantContext, store_id: UUID) -> Membership:
         user_id = require_user(context)
+        await self.limiter.enforce(JOIN_PER_USER, str(user_id))
         async with self.uow_factory(context) as uow:
             if not await uow.store_gate.is_live(store_id):
                 raise MembershipNotFoundError
@@ -126,6 +139,7 @@ class Memberships:
     async def invite(self, context: TenantContext, label: str, days: int) -> IssuedInvitation:
         store_id = require_store(context)
         user_id = require_user(context)
+        await self.limiter.enforce(INVITE_PER_STORE, str(store_id))
         now = self.clock.now()
         token = self.tokens.new_token()
         invitation = Invitation(

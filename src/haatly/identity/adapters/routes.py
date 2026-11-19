@@ -8,7 +8,6 @@ from pydantic import BaseModel, BeforeValidator, ConfigDict, StringConstraints
 from haatly.identity.app.accounts import (
     Accounts,
     InvalidCredentialsError,
-    RateLimitedError,
     SignedIn,
 )
 from haatly.identity.app.ports import EmailTakenError
@@ -114,9 +113,12 @@ router = APIRouter()
 
 
 @router.post("/auth/register", status_code=status.HTTP_201_CREATED)
-async def register(body: Registration, response: Response, accounts: AccountsDep) -> UserOut:
+async def register(
+    body: Registration, request: Request, response: Response, accounts: AccountsDep
+) -> UserOut:
     try:
-        return signed_in(response, await accounts.register(body.email, body.password))
+        result = await accounts.register(body.email, body.password, client_ip(request))
+        return signed_in(response, result)
     except INVALID_INPUT as error:
         raise ApiError(422, "validation_error", "email or password is not acceptable") from error
     except EmailTakenError as error:
@@ -133,9 +135,6 @@ async def login(
         )
     except InvalidCredentialsError as error:
         raise ApiError(401, "invalid_credentials", "email or password is wrong") from error
-    except RateLimitedError as error:
-        headers = {"Retry-After": str(error.retry_after_seconds)}
-        raise ApiError(429, "rate_limited", "too many attempts", headers) from error
     return signed_in(response, result)
 
 

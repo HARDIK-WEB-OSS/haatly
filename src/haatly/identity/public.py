@@ -19,7 +19,6 @@ from haatly.identity.adapters.unit_of_work import (
 from haatly.identity.app.accounts import (
     Accounts,
     InvalidCredentialsError,
-    RateLimitedError,
     context_of,
 )
 from haatly.identity.app.admins import AdminGrant, AdminGrants, UnknownUserError
@@ -37,7 +36,6 @@ __all__ = [
     "PasswordHasher",
     "Principal",
     "PrincipalDep",
-    "RateLimitedError",
     "SecretTokens",
     "Session",
     "SessionPolicy",
