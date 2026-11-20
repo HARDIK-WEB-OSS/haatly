@@ -23,10 +23,6 @@ proposed deploying before checkout; that plan was not adopted, and the milestone
 - **Done (8f69cab): resolve the session and the store context in one transaction.** The
   signed-in overhead on `/discover/stores` fell from 27.3 to 13.7 ms at p50, against a target of
   halving it. The discovery latency table was re-run (ADR 0016), and ADR 0015 records the design.
-- **Pool pre-ping (decision for the owner).** `pool_pre_ping=True` costs about 4 ms on every
-  transaction on the development machine, including anonymous requests; without it a checkout
-  costs 0.06 ms. Turning it off means the first request on each stale connection fails after a
-  Postgres restart. That trade-off is the owner's to make.
 - **M5 pagination.** Keyset pagination (`limit` plus `after = (created_at, id)`) for
   `/seller/members`, `/seller/invitations`, `/me/memberships` and `/admin/stores`, which return
   every row today. M4 adds the order lists, which need the same helper, so they land together.
@@ -74,6 +70,11 @@ proposed deploying before checkout; that plan was not adopted, and the milestone
   latency test as slow.
 - **Trusted proxy.** The production compose sets `HAATLY_TRUSTED_PROXIES` to the production Caddy's
   address only; the API refuses to start in production without it (ADR 0015).
+- **Pool pre-ping.** `pool_pre_ping` stays on (owner's decision, 2026-11-20). It costs about
+  4 ms per transaction on the development machine, mostly the Docker Desktop round trip. Re-measure
+  it on Linux staging. Only if it still costs more than 1 ms there, replace it with optimistic
+  disconnect handling: catch the disconnect and retry once, for idempotent reads only, with a test
+  that restarts Postgres mid-run.
 - Already planned for M7: production compose and real domain, WAL-G point-in-time recovery and the
   restore drill (ADR 0012), k6 and Playwright, and the custom seccomp profile that replaces
   `seccomp:unconfined` (ADR 0014).
