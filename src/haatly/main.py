@@ -15,6 +15,7 @@ from haatly.identity.public import (
     SqlIdentityUnitOfWorkFactory,
     identity_router,
 )
+from haatly.ledger.public import LedgerSettings, open_tigerbeetle
 from haatly.membership.public import (
     Memberships,
     SqlMembershipUnitOfWorkFactory,
@@ -61,14 +62,23 @@ def attach_services(app: FastAPI, engine: AsyncEngine, hasher: PasswordHasher) -
     app.state.discovery = Discovery(SqlDiscoveryUnitOfWorkFactory(engine), clock)
 
 
-def create_app(settings: Settings | None = None, hasher: PasswordHasher | None = None) -> FastAPI:
+def create_app(
+    settings: Settings | None = None,
+    hasher: PasswordHasher | None = None,
+    ledger: LedgerSettings | None = None,
+) -> FastAPI:
     resolved = settings or Settings()
     engine = create_engine(database_url(resolved, DbRole.APP))
 
     @asynccontextmanager
-    async def lifespan(_: FastAPI) -> AsyncIterator[None]:
-        yield
-        await engine.dispose()
+    async def lifespan(started: FastAPI) -> AsyncIterator[None]:
+        try:
+            async with open_tigerbeetle(ledger or LedgerSettings()) as gateway:
+                started.state.ledger = gateway
+                started.state.readiness_probes["ledger"] = gateway.is_reachable
+                yield
+        finally:
+            await engine.dispose()
 
     exposes_docs = resolved.environment is not Environment.PRODUCTION
     app = FastAPI(
@@ -79,6 +89,7 @@ def create_app(settings: Settings | None = None, hasher: PasswordHasher | None =
         openapi_url="/openapi.json" if exposes_docs else None,
     )
     app.state.engine = engine
+    app.state.readiness_probes = {}
     app.state.settings = resolved
     attach_services(app, engine, hasher or Argon2idHasher())
     register_error_handlers(app)

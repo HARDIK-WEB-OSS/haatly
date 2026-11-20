@@ -92,6 +92,9 @@ def balance_of(account: tb.Account) -> Balance:
     )
 
 
+READINESS_PROBE_ACCOUNT = 1
+
+
 class TigerBeetleGateway:
     def __init__(self, client: tb.ClientAsync, timeout_seconds: float) -> None:
         self.client = client
@@ -146,6 +149,13 @@ class TigerBeetleGateway:
     async def lookup_balances(self, ids: Sequence[int]) -> list[Balance]:
         accounts = await self.call(self.client.lookup_accounts(list(ids)))
         return [balance_of(account) for account in accounts]
+
+    async def is_reachable(self) -> bool:
+        try:
+            await self.lookup_balances((READINESS_PROBE_ACCOUNT,))
+        except LedgerUnavailableError:
+            return False
+        return True
 
 
 @asynccontextmanager

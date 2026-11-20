@@ -1,4 +1,6 @@
 import asyncio
+import socket
+import time
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
@@ -15,28 +17,50 @@ pytestmark = pytest.mark.anyio
 
 
 @asynccontextmanager
-async def client_for(settings: Settings) -> AsyncIterator[httpx.AsyncClient]:
-    app = create_app(settings)
+async def client_for(
+    settings: Settings, ledger: LedgerSettings | None = None
+) -> AsyncIterator[httpx.AsyncClient]:
+    app = create_app(settings, ledger=ledger)
     transport = httpx.ASGITransport(app=app)
-    try:
-        async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
-            yield client
-    finally:
-        await app.state.engine.dispose()
+    async with (
+        app.router.lifespan_context(app),
+        httpx.AsyncClient(transport=transport, base_url="http://testserver") as client,
+    ):
+        yield client
 
 
-async def test_health_and_ready(migrated: Settings) -> None:
-    async with client_for(migrated) as client:
+def unreachable_ledger() -> LedgerSettings:
+    with socket.socket() as probe:
+        probe.bind(("127.0.0.1", 0))
+        port = probe.getsockname()[1]
+    return LedgerSettings(
+        tigerbeetle_addresses=f"127.0.0.1:{port}", tigerbeetle_timeout_seconds=0.5
+    )
+
+
+async def test_health_and_ready(migrated: Settings, ledger_settings: LedgerSettings) -> None:
+    async with client_for(migrated, ledger_settings) as client:
         assert (await client.get("/health")).json() == {"status": "ok"}
         ready = await client.get("/ready")
     assert (ready.status_code, ready.json()) == (200, {"status": "ready"})
 
 
-async def test_ready_reports_an_unreachable_database(migrated: Settings) -> None:
+async def test_ready_reports_an_unreachable_database(
+    migrated: Settings, ledger_settings: LedgerSettings
+) -> None:
     broken = migrated.model_copy(update={"db_app_password": SecretStr("wrong")})
-    async with client_for(broken) as client:
+    async with client_for(broken, ledger_settings) as client:
         ready = await client.get("/ready")
     assert (ready.status_code, ready.json()) == (503, {"status": "database unavailable"})
+
+
+async def test_ready_reports_an_unreachable_ledger(migrated: Settings) -> None:
+    async with client_for(migrated, unreachable_ledger()) as client:
+        started = time.monotonic()
+        ready = await client.get("/ready")
+        elapsed = time.monotonic() - started
+    assert (ready.status_code, ready.json()) == (503, {"status": "ledger unavailable"})
+    assert elapsed < 5
 
 
 def production_settings(**overrides: object) -> Settings:
@@ -51,7 +75,7 @@ def production_settings(**overrides: object) -> Settings:
 
 
 async def test_production_hides_interactive_docs() -> None:
-    async with client_for(production_settings()) as client:
+    async with client_for(production_settings(), unreachable_ledger()) as client:
         assert (await client.get("/docs")).status_code == 404
         assert (await client.get("/openapi.json")).status_code == 404
 
