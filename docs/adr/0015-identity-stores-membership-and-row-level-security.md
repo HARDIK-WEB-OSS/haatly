@@ -1,8 +1,9 @@
 # 0015 Identity, stores, membership and how row-level security enforces them
 
-- Status: Implemented (5cd6d01, bd4f89b). Identity, stores, membership and row-level security
-  in 5cd6d01. The login limits only worked behind Caddy from bd4f89b (review finding H1);
-  before that, every login looked like it came from Caddy.
+- Status: Implemented (5cd6d01, bd4f89b, 8f69cab). Identity, stores, membership and row-level
+  security in 5cd6d01. The login limits only worked behind Caddy from bd4f89b (review finding
+  H1); before that, every login looked like it came from Caddy. The caller's context has been
+  resolved in one transaction since 8f69cab.
 - Date: 2026-11-18
 
 ## Context
@@ -70,6 +71,31 @@ Every request resolves to one `TenantContext`:
 | `users.is_admin` | `admin`, with user |
 | owns a store | `seller`, with user and store |
 | anyone else | `buyer`, with user |
+
+**One transaction per caller (from 8f69cab).**
+
+- `stores.app.callers.Callers.context_for(token)` resolves the context in one `system`
+  transaction.
+- Identity's `resolve_session` runs one query that joins the session to its user. It checks the
+  idle and absolute limits and touches `last_seen_at` at most once a minute.
+- Then stores looks up the caller's own store, `WHERE owner_user_id` is the user that identity
+  just verified.
+- Before this, a signed-in request opened two transactions: identity resolved the session as
+  `system`, then stores ran the store lookup as `buyer`. Each transaction on the development
+  machine costs about 4 ms of pool pre-ping, plus `BEGIN`, `COMMIT` and 1.3–1.8 ms per
+  statement. Merging them cut the signed-in overhead on `/discover/stores` from 27.3 to 13.7 ms
+  at p50 (ADR 0016).
+- The store lookup now runs as `system` rather than `buyer`. That is the authentication
+  exception ADR 0002 already allows, and the query is bounded by the verified user id. Under
+  either role it returns the same row: the owner's store in any status.
+- Stores is downstream of identity, so stores calls identity and never the reverse.
+  - Identity exposes `resolve_session` through a new pure `haatly.identity.kernel`. It follows the
+    platform kernel's pattern (ADR 0001), and an import-linter contract keeps it free of I/O.
+  - The stores unit of work for callers carries identity's session repository on the same
+    connection, as ADR 0014 lets a module carry ledger intents. Identity's SQL stays in identity.
+- `Accounts.resolve`, used by identity's own routes (`/me`, password change), calls the same
+  `resolve_session`. Those routes still resolve the session in a transaction of their own.
+- A test proves that a signed-in caller is resolved with one pool checkout and three statements.
 
 Admins are made by an operator with the audited `haatly_ops` role. There is no endpoint for it.
 `./tasks.ps1 make-admin <email>` (`haatly.identity.adapters.make_admin`) connects as `haatly_ops`,
@@ -181,7 +207,8 @@ that session. Pointing the fixture at the owner role makes the guard fail.
 
 ## Consequences
 
-- Each authenticated request costs a session lookup, and a store lookup to find the context.
+- Each authenticated request costs one transaction to find its context: `set_config`, one
+  session-and-user query and one store lookup.
 - Identity runs its authentication queries as `system`. RLS still guards every other read of a
   user row.
 - A seller cannot see their members' emails through RLS. The member list asks identity for

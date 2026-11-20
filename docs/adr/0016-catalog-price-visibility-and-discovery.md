@@ -208,3 +208,29 @@ The owner set these targets on 2026-11-20 from the evidence below:
   inlined, so the plan is large.
 
 The test still fails above a p95 of 500 ms, as a regression guard for CI.
+
+### Re-measured after the first M4 item (8f69cab)
+
+Signed-in callers now resolve their context in one transaction instead of two (ADR 0015). Two
+runs, in milliseconds (p50 / p95 / p99):
+
+| Case | Run 1 | Run 2 |
+|---|---|---|
+| `/discover/stores`, anonymous | 18.2 / 25.2 / 33.6 | 19.1 / 33.8 / 40.2 |
+| products, every product, anonymous | 50.8 / 95.2 / 128.2 | 48.2 / 94.9 / 110.9 |
+| products, every product, member of 20 stores | 69.0 / 117.0 / 135.6 | 70.8 / 127.3 / 154.1 |
+| products, a tenth, anonymous | 28.6 / 49.4 / 75.0 | 28.3 / 38.9 / 47.1 |
+| products, a tenth, member of 20 stores | 51.9 / 71.2 / 121.4 | 49.8 / 71.4 / 81.5 |
+| products, under 1%, anonymous | 34.2 / 70.6 / 117.8 | 23.9 / 32.5 / 35.9 |
+| products, under 1%, member of 20 stores | 45.4 / 71.2 / 102.8 | 44.8 / 83.0 / 183.1 |
+| products, mixed, anonymous | 35.5 / 54.2 / 77.5 | 34.1 / 55.6 / 83.6 |
+| products, mixed, member of 20 stores | 57.6 / 81.9 / 108.7 | 55.1 / 75.4 / 95.4 |
+
+- **Member cases dropped at p50 by about 13–18 ms** against the M3 exit runs, in line with the
+  overhead measured on `/discover/stores`: 27.3 ms before, 13.7 ms after. Every broad and
+  signed-in case stays under the 150 ms p95 target.
+- **The anonymous path did not change in this commit.** Its spread between runs (under 1%: p95
+  70.6 in run 1, 32.5 in run 2) is noise. The machine had 0.2–0.6 GB of free memory during these
+  runs, with other projects' containers and the development TigerBeetle (1.3 GB) running next to
+  the test containers.
+- Anonymous mixed searches stay at p95 54–56 ms, against the accepted miss recorded above.

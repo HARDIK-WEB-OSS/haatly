@@ -20,13 +20,13 @@ proposed deploying before checkout; that plan was not adopted, and the milestone
 
 ## M4: ordering, checkout, Razorpay, webhooks
 
-- **First: resolve the session and the store context in one transaction.** Today a signed-in
-  request opens two extra transactions before its own work: identity resolves the session, then
-  stores looks up whether the user owns a store. On the development machine that costs about
-  24–30 ms per signed-in request (`/me` 25.6 ms; `/discover/stores` 18.5 ms anonymous against
-  42.3 ms for a signed-in buyer), because each Postgres round trip through Docker Desktop costs
-  1.2–1.5 ms (ADR 0016). Target: halve that overhead, then re-run the discovery latency table in
-  ADR 0016 and record the new numbers.
+- **Done (8f69cab): resolve the session and the store context in one transaction.** The
+  signed-in overhead on `/discover/stores` fell from 27.3 to 13.7 ms at p50, against a target of
+  halving it. The discovery latency table was re-run (ADR 0016), and ADR 0015 records the design.
+- **Pool pre-ping (decision for the owner).** `pool_pre_ping=True` costs about 4 ms on every
+  transaction on the development machine, including anonymous requests; without it a checkout
+  costs 0.06 ms. Turning it off means the first request on each stale connection fails after a
+  Postgres restart. That trade-off is the owner's to make.
 - **M5 pagination.** Keyset pagination (`limit` plus `after = (created_at, id)`) for
   `/seller/members`, `/seller/invitations`, `/me/memberships` and `/admin/stores`, which return
   every row today. M4 adds the order lists, which need the same helper, so they land together.
