@@ -24,7 +24,7 @@ ROUNDS = 25
 
 async def accept(api: Api, actor: Actor, token: str) -> int:
     response = await api.call(
-        "POST", "/invitations/accept", token=actor.token, json={"token": token}
+        "POST", "/v1/invitations/accept", token=actor.token, json={"token": token}
     )
     return response.status_code
 

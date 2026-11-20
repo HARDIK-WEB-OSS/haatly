@@ -65,15 +65,15 @@ async def test_a_new_file_version_updates_existing_pins(
 @pytest.mark.anyio
 async def test_pin_lookups_over_http(api: Api, app_engine: AsyncEngine, tmp_path: Path) -> None:
     await import_file(discovery(app_engine), write_fixture(tmp_path / "pincodes.csv"))
-    found = await api.call("GET", "/pin-codes/560066")
+    found = await api.call("GET", "/v1/pin-codes/560066")
     assert found.json() == {
         "pin_code": "560066",
         "district": "Bengaluru Urban",
         "state": "Karnataka",
     }
-    assert (await api.call("GET", "/pin-codes/560095")).status_code == 404
-    assert (await api.call("GET", "/pin-codes/01100")).status_code == 422
-    assert (await api.call("GET", "/pin-codes/999999")).status_code == 404
+    assert (await api.call("GET", "/v1/pin-codes/560095")).status_code == 404
+    assert (await api.call("GET", "/v1/pin-codes/01100")).status_code == 422
+    assert (await api.call("GET", "/v1/pin-codes/999999")).status_code == 404
 
 
 def test_the_command_line_imports_and_reports(

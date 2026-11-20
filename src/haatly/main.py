@@ -44,6 +44,8 @@ from haatly.stores.public import (
     stores_router,
 )
 
+API_PREFIX = "/v1"
+
 
 def attach_services(app: FastAPI, engine: AsyncEngine, hasher: PasswordHasher) -> None:
     clock = SystemClock()
@@ -97,14 +99,14 @@ def create_app(
     app.add_middleware(RequestIdMiddleware)
     if resolved.trusted_proxy_list:
         app.add_middleware(ProxyHeadersMiddleware, trusted_hosts=resolved.trusted_proxy_list)
-    routers = (
-        platform_router,
+    app.include_router(platform_router)
+    versioned = (
         identity_router,
         stores_router,
         membership_router,
         catalog_router,
         discovery_router,
     )
-    for router in routers:
-        app.include_router(router)
+    for router in versioned:
+        app.include_router(router, prefix=API_PREFIX)
     return app

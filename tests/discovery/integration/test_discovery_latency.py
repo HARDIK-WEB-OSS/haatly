@@ -201,7 +201,7 @@ def paths(endpoint: str, searches: tuple[str, ...]) -> list[str]:
         query = f"{origin}&radius_km={radius}"
         if searches:
             query = f"q={searches[index % len(searches)]}&{query}"
-        built.append(f"/discover/{endpoint}?{query}")
+        built.append(f"/v1/discover/{endpoint}?{query}")
     return built
 
 

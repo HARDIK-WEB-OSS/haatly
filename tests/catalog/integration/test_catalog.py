@@ -22,7 +22,7 @@ async def test_a_seller_builds_a_product_with_variants(api: Api, seeder: Seeder)
     store_id = str(store.id)
     created = await api.call(
         "POST",
-        "/seller/products",
+        "/v1/seller/products",
         token=owner.token,
         json={"title": "Kanjeevaram silk", "description": "Handwoven in Kanchipuram"},
     )
@@ -30,28 +30,28 @@ async def test_a_seller_builds_a_product_with_variants(api: Api, seeder: Seeder)
     product_id = created.json()["id"]
     variant = await api.call(
         "POST",
-        f"/seller/products/{product_id}/variants",
+        f"/v1/seller/products/{product_id}/variants",
         token=owner.token,
         json={"label": "6 yards", "price_paise": 1_250_000},
     )
     assert variant.json()["price_paise"] == 1_250_000
     repriced = await api.call(
         "PATCH",
-        f"/seller/variants/{variant.json()['id']}",
+        f"/v1/seller/variants/{variant.json()['id']}",
         token=owner.token,
         json={"price_paise": 1_300_000, "label": "6.2 yards"},
     )
     assert (repriced.json()["price_paise"], repriced.json()["label"]) == (1_300_000, "6.2 yards")
-    assert (await api.call("GET", f"/stores/{store_id}/products")).json() == []
+    assert (await api.call("GET", f"/v1/stores/{store_id}/products")).json() == []
     published = await api.call(
-        "PATCH", f"/seller/products/{product_id}", token=owner.token, json={"status": "active"}
+        "PATCH", f"/v1/seller/products/{product_id}", token=owner.token, json={"status": "active"}
     )
     assert published.json()["variants"][0]["price_paise"] == 1_300_000
-    listing = (await api.call("GET", f"/stores/{store_id}/products")).json()
+    listing = (await api.call("GET", f"/v1/stores/{store_id}/products")).json()
     assert [(p["title"], p["price_from_paise"]) for p in listing] == [
         ("Kanjeevaram silk", 1_300_000)
     ]
-    mine = await api.call("GET", "/seller/products", token=owner.token)
+    mine = await api.call("GET", "/v1/seller/products", token=owner.token)
     assert [p["id"] for p in mine.json()] == [product_id]
 
 
@@ -72,7 +72,7 @@ async def test_prices_are_positive_whole_paise(
     owner, store = await seller_with_store(seeder)
     product = await seeder.product(store)
     response = await api.call(
-        "POST", f"/seller/products/{product.id}/variants", token=owner.token, json=body
+        "POST", f"/v1/seller/products/{product.id}/variants", token=owner.token, json=body
     )
     assert response.status_code == 422
 
@@ -82,21 +82,21 @@ async def test_another_sellers_products_are_unreachable(api: Api, seeder: Seeder
     other, _ = await seller_with_store(seeder)
     created = await api.call(
         "POST",
-        "/seller/products",
+        "/v1/seller/products",
         token=owner.token,
         json={"title": "Ikat", "description": "Cotton"},
     )
     product_id = created.json()["id"]
     assert (
-        await api.call("GET", f"/seller/products/{product_id}", token=other.token)
+        await api.call("GET", f"/v1/seller/products/{product_id}", token=other.token)
     ).status_code == 404
     patched = await api.call(
-        "PATCH", f"/seller/products/{product_id}", token=other.token, json={"title": "Mine now"}
+        "PATCH", f"/v1/seller/products/{product_id}", token=other.token, json={"title": "Mine now"}
     )
     assert patched.status_code == 404
     variant = await api.call(
         "POST",
-        f"/seller/products/{product_id}/variants",
+        f"/v1/seller/products/{product_id}/variants",
         token=other.token,
         json={"label": "x", "price_paise": 100},
     )
@@ -130,9 +130,9 @@ async def test_products_and_prices_follow_the_visibility_rules(
     member = await seeder.user("member")
     await seeder.membership(store, member, MembershipLevel.CONNECTED, MembershipStatus.ACTIVE)
     actor = {"stranger": ANONYMOUS, "member": member, "owner": owner}[viewer]
-    listing = await api.call("GET", f"/stores/{store.id}/products", token=actor.token)
+    listing = await api.call("GET", f"/v1/stores/{store.id}/products", token=actor.token)
     assert {p["title"]: p["price_from_paise"] for p in listing.json()} == expected
-    detail = await api.call("GET", f"/stores/{store.id}/products/{public.id}", token=actor.token)
+    detail = await api.call("GET", f"/v1/stores/{store.id}/products/{public.id}", token=actor.token)
     assert detail.json()["variants"][0]["price_paise"] == expected["public"]
 
 
@@ -145,9 +145,11 @@ async def test_a_pending_members_request_does_not_reveal_anything(api: Api, seed
     await seeder.variant(hidden, 900)
     hopeful = await seeder.user("hopeful")
     await seeder.membership(store, hopeful, MembershipLevel.CONNECTED, MembershipStatus.PENDING)
-    listing = await api.call("GET", f"/stores/{store.id}/products", token=hopeful.token)
+    listing = await api.call("GET", f"/v1/stores/{store.id}/products", token=hopeful.token)
     assert listing.json() == []
-    detail = await api.call("GET", f"/stores/{store.id}/products/{hidden.id}", token=hopeful.token)
+    detail = await api.call(
+        "GET", f"/v1/stores/{store.id}/products/{hidden.id}", token=hopeful.token
+    )
     assert detail.status_code == 404
 
 
@@ -156,8 +158,8 @@ async def test_an_unlisted_store_shows_no_products(api: Api, seeder: Seeder) -> 
     store = await seeder.store(owner, StoreStatus.PENDING, published=True)
     product = await seeder.product(store, title="early")
     await seeder.variant(product, 500)
-    assert (await api.call("GET", f"/stores/{store.id}/products")).json() == []
-    own = await api.call("GET", f"/stores/{store.id}/products", token=owner.token)
+    assert (await api.call("GET", f"/v1/stores/{store.id}/products")).json() == []
+    own = await api.call("GET", f"/v1/stores/{store.id}/products", token=owner.token)
     assert [p["title"] for p in own.json()] == ["early"]
 
 
@@ -192,9 +194,9 @@ async def test_storefront_search_tolerates_typos(api: Api, seeder: Seeder) -> No
     store_id = str(store.id)
     for title in ("Banarasi silk saree", "Cotton kurta", "Pashmina shawl"):
         await seeder.product(store, title=title)
-    exact = await api.call("GET", f"/stores/{store_id}/products?q=silk saree")
+    exact = await api.call("GET", f"/v1/stores/{store_id}/products?q=silk saree")
     assert [p["title"] for p in exact.json()] == ["Banarasi silk saree"]
-    typo = await api.call("GET", f"/stores/{store_id}/products?q=pashmeena shawl")
+    typo = await api.call("GET", f"/v1/stores/{store_id}/products?q=pashmeena shawl")
     assert [p["title"] for p in typo.json()] == ["Pashmina shawl"]
 
 
@@ -203,5 +205,5 @@ async def test_a_misspelt_word_finds_long_titles_too(api: Api, seeder: Seeder) -
     titles = ("Kanjeevaram cotton blend with zari border", "Kanjeevaram silk", "Cotton kurta")
     for title in titles:
         await seeder.product(store, title=title)
-    typo = await api.call("GET", f"/stores/{store.id}/products?q=kanjivaram")
+    typo = await api.call("GET", f"/v1/stores/{store.id}/products?q=kanjivaram")
     assert sorted(p["title"] for p in typo.json()) == sorted(titles[:2])

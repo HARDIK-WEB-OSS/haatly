@@ -188,7 +188,7 @@ function Send-LoginBody {
     param([int]$Size)
     $body = '{"email":"' + ('a' * $Size) + '","password":"x"}'
     $arguments = @{
-        Uri = 'https://localhost:8443/auth/login'
+        Uri = 'https://localhost:8443/v1/auth/login'
         Method = 'Post'
         Body = $body
         ContentType = 'application/json'

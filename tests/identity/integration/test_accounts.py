@@ -43,7 +43,9 @@ def session_of(response: httpx.Response) -> str:
 
 
 async def register(api: Api, email: str, password: str = PASSWORD) -> str:
-    response = await api.call("POST", "/auth/register", json={"email": email, "password": password})
+    response = await api.call(
+        "POST", "/v1/auth/register", json={"email": email, "password": password}
+    )
     assert response.status_code == 201, response.text
     return session_of(response)
 
@@ -66,7 +68,9 @@ async def test_registration_stores_an_argon2id_hash_and_sets_a_strict_cookie(
     api: Api, app_engine: AsyncEngine
 ) -> None:
     email = new_email()
-    response = await api.call("POST", "/auth/register", json={"email": email, "password": PASSWORD})
+    response = await api.call(
+        "POST", "/v1/auth/register", json={"email": email, "password": PASSWORD}
+    )
     assert response.status_code == 201
     assert response.json()["email"] == email
     cookie = response.headers["set-cookie"].lower()
@@ -78,9 +82,9 @@ async def test_registration_stores_an_argon2id_hash_and_sets_a_strict_cookie(
 async def test_the_session_cookie_identifies_the_user(api: Api) -> None:
     email = new_email()
     token = await register(api, email)
-    assert (await api.call("GET", "/me", token=token)).json()["email"] == email
-    assert (await api.call("GET", "/me")).status_code == 401
-    assert (await api.call("GET", "/me", token="forged")).status_code == 401
+    assert (await api.call("GET", "/v1/me", token=token)).json()["email"] == email
+    assert (await api.call("GET", "/v1/me")).status_code == 401
+    assert (await api.call("GET", "/v1/me", token="forged")).status_code == 401
 
 
 @pytest.mark.parametrize(
@@ -88,7 +92,9 @@ async def test_the_session_cookie_identifies_the_user(api: Api) -> None:
     [("not-an-email", PASSWORD), ("short@example.test", "tiny"), ("", PASSWORD)],
 )
 async def test_unacceptable_registrations_are_refused(api: Api, email: str, password: str) -> None:
-    response = await api.call("POST", "/auth/register", json={"email": email, "password": password})
+    response = await api.call(
+        "POST", "/v1/auth/register", json={"email": email, "password": password}
+    )
     assert response.status_code == 422
     assert response.json()["error"]["code"] == "validation_error"
 
@@ -96,7 +102,7 @@ async def test_unacceptable_registrations_are_refused(api: Api, email: str, pass
 async def test_nul_bytes_are_stripped_and_emails_are_normalised(api: Api) -> None:
     email = new_email()
     token = await register(api, f"  {email.upper()}\x00 ")
-    assert (await api.call("GET", "/me", token=token)).json()["email"] == email
+    assert (await api.call("GET", "/v1/me", token=token)).json()["email"] == email
 
 
 async def test_an_email_can_register_only_once_even_concurrently(api: Api) -> None:
@@ -105,7 +111,7 @@ async def test_an_email_can_register_only_once_even_concurrently(api: Api) -> No
     statuses = sorted(
         response.status_code
         for response in await asyncio.gather(
-            *(api.call("POST", "/auth/register", json=body) for _ in range(5))
+            *(api.call("POST", "/v1/auth/register", json=body) for _ in range(5))
         )
     )
     assert statuses == [201, 409, 409, 409, 409]
@@ -115,43 +121,45 @@ async def test_login_rotates_the_session_and_logout_ends_it(api: Api) -> None:
     email = new_email()
     first = await register(api, email)
     wrong = await api.call(
-        "POST", "/auth/login", json={"email": email, "password": "wrong-password"}
+        "POST", "/v1/auth/login", json={"email": email, "password": "wrong-password"}
     )
     assert wrong.status_code == 401
     unknown = await api.call(
-        "POST", "/auth/login", json={"email": new_email(), "password": PASSWORD}
+        "POST", "/v1/auth/login", json={"email": new_email(), "password": PASSWORD}
     )
     assert unknown.status_code == 401
     login = await api.call(
-        "POST", "/auth/login", token=first, json={"email": email, "password": PASSWORD}
+        "POST", "/v1/auth/login", token=first, json={"email": email, "password": PASSWORD}
     )
     assert login.status_code == 200
     second = session_of(login)
     assert second != first
-    assert (await api.call("GET", "/me", token=first)).status_code == 401
-    assert (await api.call("POST", "/auth/logout", token=second)).status_code == 204
-    assert (await api.call("GET", "/me", token=second)).status_code == 401
-    assert (await api.call("POST", "/auth/logout")).status_code == 204
+    assert (await api.call("GET", "/v1/me", token=first)).status_code == 401
+    assert (await api.call("POST", "/v1/auth/logout", token=second)).status_code == 204
+    assert (await api.call("GET", "/v1/me", token=second)).status_code == 401
+    assert (await api.call("POST", "/v1/auth/logout")).status_code == 204
 
 
 async def test_a_password_change_revokes_every_session(api: Api) -> None:
     email = new_email()
     first = await register(api, email)
-    login = await api.call("POST", "/auth/login", json={"email": email, "password": PASSWORD})
+    login = await api.call("POST", "/v1/auth/login", json={"email": email, "password": PASSWORD})
     second = session_of(login)
     body = {"current_password": PASSWORD, "new_password": "a-much-better-passphrase"}
     bad = await api.call(
-        "POST", "/me/password", token=first, json=body | {"current_password": "nope-nope-nope"}
+        "POST", "/v1/me/password", token=first, json=body | {"current_password": "nope-nope-nope"}
     )
     assert bad.status_code == 401
     weak = await api.call(
-        "POST", "/me/password", token=first, json=body | {"new_password": "short"}
+        "POST", "/v1/me/password", token=first, json=body | {"new_password": "short"}
     )
     assert weak.status_code == 422
-    changed = await api.call("POST", "/me/password", token=first, json=body)
+    changed = await api.call("POST", "/v1/me/password", token=first, json=body)
     assert changed.status_code == 204
     fresh = session_of(changed)
-    statuses = [(await api.call("GET", "/me", token=t)).status_code for t in (first, second, fresh)]
+    statuses = [
+        (await api.call("GET", "/v1/me", token=t)).status_code for t in (first, second, fresh)
+    ]
     assert statuses == [401, 401, 200]
 
 
@@ -194,12 +202,12 @@ async def test_the_per_ip_limit_spans_emails(api: Api) -> None:
     for attempt in range(50):
         response = await api.call(
             "POST",
-            "/auth/login",
+            "/v1/auth/login",
             json={"email": f"nobody{attempt}@example.test", "password": PASSWORD},
         )
         assert response.status_code == 401
     limited = await api.call(
-        "POST", "/auth/login", json={"email": new_email(), "password": PASSWORD}
+        "POST", "/v1/auth/login", json={"email": new_email(), "password": PASSWORD}
     )
     assert limited.status_code == 429
     assert int(limited.headers["retry-after"]) > 0
@@ -313,9 +321,11 @@ async def test_a_refused_registration_still_counts_towards_the_limit(api: Api) -
     taken = new_email()
     await register(api, taken)
     body = {"email": taken, "password": PASSWORD}
-    statuses = [(await api.call("POST", "/auth/register", json=body)).status_code for _ in range(9)]
+    statuses = [
+        (await api.call("POST", "/v1/auth/register", json=body)).status_code for _ in range(9)
+    ]
     assert statuses == [409] * 9
-    limited = await api.call("POST", "/auth/register", json=body | {"email": new_email()})
+    limited = await api.call("POST", "/v1/auth/register", json=body | {"email": new_email()})
     assert limited.status_code == 429
     assert limited.json()["error"]["code"] == "rate_limited"
     assert int(limited.headers["retry-after"]) > 0

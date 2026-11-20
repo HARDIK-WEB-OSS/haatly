@@ -77,7 +77,7 @@ class Edge:
         self, email: str, password: str, peer: str, forwarded_for: str | None
     ) -> httpx.Response:
         body = {"email": email, "password": password}
-        return await self.post("/auth/login", body, peer, forwarded_for)
+        return await self.post("/v1/auth/login", body, peer, forwarded_for)
 
 
 @pytest.fixture
@@ -95,7 +95,7 @@ async def edge(
 async def registered(edge: Edge) -> str:
     email = f"{unique('victim')}@example.test"
     body = {"email": email, "password": PASSWORD}
-    response = await edge.post("/auth/register", body, CADDY, "192.0.2.1")
+    response = await edge.post("/v1/auth/register", body, CADDY, "192.0.2.1")
     assert response.status_code == 201, response.text
     return email
 
