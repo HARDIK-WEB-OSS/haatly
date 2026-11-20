@@ -26,9 +26,14 @@ behind them, and every design decision, live in [`docs/adr/`](docs/adr).
    Conventional Commits, one logical change per commit.
 10. **Dev is Windows and PowerShell.** Services run in Docker Desktop. Every command goes through
     `tasks.ps1` (ADR 0007).
-11. **Git workflow.** Work and commit on `main`, locally. Never push, open pull requests or merge.
-    When work is committed and ready, say **READY TO PUSH** and stop. The owner pushes and reports
-    the CI result. A red CI run is fixed with a new commit.
+11. **Git workflow.** Work and commit on `main`, locally. Never push, open pull requests, merge,
+    make releases or change the repository on GitHub. When work is committed and ready, say
+    **READY TO PUSH** and stop. The owner pushes.
+    - The only GitHub commands a contributor may run are read-only: `gh run list`, `gh run view`,
+      `gh run watch` and `gh run view --log-failed`.
+    - After the owner pushes, watch the latest CI run for `main` with `gh run watch`. If it is
+      green, continue to the next step. If it is red, read the failed log, fix it locally with a
+      new commit, and say **READY TO PUSH** again.
 12. **Every file read and write names `encoding="utf-8"`**: `open`, `Path.read_text`,
     `Path.write_text`, `subprocess.run(..., encoding="utf-8")` instead of `text=True`, and bytes
     decoded with `.decode("utf-8")`. This applies to project code and to any one-off script used
