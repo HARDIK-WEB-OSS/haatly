@@ -137,6 +137,7 @@ function Invoke-MigrateRoundtrip {
 }
 
 function Invoke-Test {
+    Assert-AppStackStopped
     Invoke-Uv (@('pytest', '--cov', '--cov-report=term-missing', '--cov-report=xml', '--cov-report=json') + $Rest)
     Invoke-Uv @('python', 'tools/check_package_coverage.py', 'coverage.json')
 }
@@ -161,7 +162,32 @@ function Invoke-Audit {
     }
 }
 
+function Get-RunningAppContainers {
+    $withProfile = @(docker compose --profile app config --services)
+    $withoutProfile = @(docker compose config --services)
+    $appOnly = @($withProfile | Where-Object { $_ -notin $withoutProfile })
+    if ($appOnly.Count -eq 0) {
+        return @()
+    }
+    $running = docker compose --profile app ps --status running --format '{{.Service}} {{.Name}}' @appOnly
+    return @($running | Where-Object { $_ })
+}
+
+function Assert-AppStackStopped {
+    $running = @(Get-RunningAppContainers)
+    if ($running.Count -eq 0) {
+        return
+    }
+    $services = ($running | ForEach-Object { $_.Split(' ')[0] }) -join ' '
+    $names = ($running | ForEach-Object { $_.Split(' ')[1] }) -join ', '
+    throw ("The app profile is running ($names). The tests start their own Postgres and " +
+        "TigerBeetle, and both stacks together run Docker out of memory. Stop it first:`n" +
+        "  docker compose --profile app stop $services`n" +
+        "or stop everything with: ./tasks.ps1 down")
+}
+
 function Invoke-Check {
+    Assert-AppStackStopped
     Invoke-Lint
     Invoke-Typecheck
     Invoke-MigrateRoundtrip
