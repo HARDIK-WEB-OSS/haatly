@@ -10,6 +10,7 @@ from haatly.identity.app.ports import (
     PasswordHasher,
     TokenSource,
 )
+from haatly.identity.app.sessions import resolve_session
 from haatly.identity.domain.model import (
     Principal,
     Session,
@@ -113,17 +114,8 @@ class Accounts:
             await uow.sessions.delete(hash_token(presented))
 
     async def resolve(self, presented: str) -> Principal | None:
-        now = self.clock.now()
         async with self.uow_factory(SYSTEM) as uow:
-            session = await uow.sessions.by_token_hash(hash_token(presented))
-            if session is None or not self.policy.is_live(session, now):
-                return None
-            user = await uow.users.get(session.user_id)
-            if user is None:
-                return None
-            if self.policy.needs_touch(session, now):
-                await uow.sessions.touch(session.id, now)
-        return Principal(user.id, user.is_admin)
+            return await resolve_session(uow.sessions, presented, self.clock.now(), self.policy)
 
     async def rotate(self, principal: Principal, presented: str) -> str:
         async with self.uow_factory(SYSTEM) as uow:

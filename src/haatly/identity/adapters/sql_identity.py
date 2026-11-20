@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncConnection
 
 from haatly.identity.adapters.tables import sessions, users
 from haatly.identity.app.ports import EmailTakenError
-from haatly.identity.domain.model import Session, User
+from haatly.identity.domain.model import Session, SessionHolder, User
 from haatly.platform.public import is_unique_violation
 
 USER_COLUMNS = (
@@ -84,16 +84,23 @@ class SqlSessionRepository:
             )
         )
 
-    async def by_token_hash(self, token_hash: str) -> Session | None:
-        statement = select(
-            sessions.c.id,
-            sessions.c.user_id,
-            sessions.c.token_hash,
-            sessions.c.created_at,
-            sessions.c.last_seen_at,
-        ).where(sessions.c.token_hash == token_hash)
+    async def with_user(self, token_hash: str) -> SessionHolder | None:
+        statement = (
+            select(
+                sessions.c.id,
+                sessions.c.user_id,
+                sessions.c.token_hash,
+                sessions.c.created_at,
+                sessions.c.last_seen_at,
+                users.c.is_admin,
+            )
+            .join(users, users.c.id == sessions.c.user_id)
+            .where(sessions.c.token_hash == token_hash)
+        )
         row = (await self.connection.execute(statement)).first()
-        return None if row is None else Session(*row)
+        if row is None:
+            return None
+        return SessionHolder(Session(*row[:5]), row.is_admin)
 
     async def touch(self, session_id: UUID, now: datetime) -> None:
         await self.connection.execute(

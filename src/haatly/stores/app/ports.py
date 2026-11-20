@@ -3,6 +3,7 @@ from datetime import datetime
 from typing import Protocol, Self
 from uuid import UUID
 
+from haatly.identity.kernel import SessionRepository
 from haatly.platform.kernel import TenantContext, UnitOfWork
 from haatly.stores.domain.model import Store, StoreChanges, StoreStatus
 
@@ -42,3 +43,12 @@ class StoresUnitOfWork(UnitOfWork, Protocol):
 
 class StoresUnitOfWorkFactory(Protocol):
     def __call__(self, context: TenantContext) -> StoresUnitOfWork: ...
+
+
+class CallerUnitOfWork(StoresUnitOfWork, Protocol):
+    @property
+    def sessions(self) -> SessionRepository: ...
+
+
+class CallerUnitOfWorkFactory(Protocol):
+    def __call__(self, context: TenantContext) -> CallerUnitOfWork: ...

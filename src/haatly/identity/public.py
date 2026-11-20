@@ -11,6 +11,7 @@ from haatly.identity.adapters.routes import (
 )
 from haatly.identity.adapters.routes import router as identity_router
 from haatly.identity.adapters.security import Argon2idHasher, SecretTokens
+from haatly.identity.adapters.sql_identity import SqlSessionRepository
 from haatly.identity.adapters.tables import metadata as identity_metadata
 from haatly.identity.adapters.unit_of_work import (
     SqlIdentityUnitOfWork,
@@ -41,6 +42,7 @@ __all__ = [
     "SessionPolicy",
     "SqlIdentityUnitOfWork",
     "SqlIdentityUnitOfWorkFactory",
+    "SqlSessionRepository",
     "UnknownUserError",
     "User",
     "accounts_of",

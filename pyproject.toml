@@ -222,6 +222,12 @@ source_modules = ["haatly.platform.kernel"]
 forbidden_modules = ["sqlalchemy", "asyncpg", "httpx", "tigerbeetle"]
 
 [[tool.importlinter.contracts]]
+name = "identity kernel does no I/O"
+type = "forbidden"
+source_modules = ["haatly.identity.kernel"]
+forbidden_modules = ["sqlalchemy", "asyncpg", "httpx", "tigerbeetle"]
+
+[[tool.importlinter.contracts]]
 name = "domain is pure"
 type = "forbidden"
 source_modules = ["haatly.*.domain"]

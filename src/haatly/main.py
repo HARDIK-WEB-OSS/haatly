@@ -35,7 +35,13 @@ from haatly.platform.public import (
     register_error_handlers,
 )
 from haatly.platform.public import router as platform_router
-from haatly.stores.public import SqlStoresUnitOfWorkFactory, Stores, stores_router
+from haatly.stores.public import (
+    Callers,
+    SqlCallerUnitOfWorkFactory,
+    SqlStoresUnitOfWorkFactory,
+    Stores,
+    stores_router,
+)
 
 
 def attach_services(app: FastAPI, engine: AsyncEngine, hasher: PasswordHasher) -> None:
@@ -47,6 +53,7 @@ def attach_services(app: FastAPI, engine: AsyncEngine, hasher: PasswordHasher) -
         SqlIdentityUnitOfWorkFactory(engine), hasher, tokens, limiter, ids, clock
     )
     app.state.stores = Stores(SqlStoresUnitOfWorkFactory(engine), ids, clock)
+    app.state.callers = Callers(SqlCallerUnitOfWorkFactory(engine), clock)
     app.state.memberships = Memberships(
         SqlMembershipUnitOfWorkFactory(engine), tokens, ids, clock, limiter
     )

@@ -7,7 +7,6 @@ from pydantic import BaseModel, ConfigDict
 from haatly.identity.public import (
     Principal,
     accounts_of,
-    optional_principal,
     presented_token,
     set_session_cookie,
 )
@@ -19,8 +18,9 @@ from haatly.platform.public import (
     TenantContext,
     bounded,
 )
+from haatly.stores.app.callers import Callers
 from haatly.stores.app.ports import AlreadyOwnsStoreError, SlugTakenError
-from haatly.stores.app.stores import NotAllowedError, StoreNotFoundError, Stores, Viewer
+from haatly.stores.app.stores import NotAllowedError, StoreNotFoundError, Stores
 from haatly.stores.domain.model import (
     InvalidSlugError,
     PriceVisibility,
@@ -93,11 +93,13 @@ def stores_of(request: Request) -> Stores:
 StoresDep = Annotated[Stores, Depends(stores_of)]
 
 
-async def current_context(
-    principal: Annotated[Principal | None, Depends(optional_principal)], stores: StoresDep
-) -> TenantContext:
-    viewer = None if principal is None else Viewer(principal.user_id, principal.is_admin)
-    return await stores.context_for(viewer)
+def callers_of(request: Request) -> Callers:
+    callers: Callers = request.app.state.callers
+    return callers
+
+
+async def current_context(request: Request) -> TenantContext:
+    return await callers_of(request).context_for(presented_token(request))
 
 
 ContextDep = Annotated[TenantContext, Depends(current_context)]

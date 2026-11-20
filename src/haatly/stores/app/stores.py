@@ -3,7 +3,6 @@ from dataclasses import dataclass
 from uuid import UUID
 
 from haatly.platform.kernel import (
-    PUBLIC,
     ActorRole,
     AuditAction,
     Clock,
@@ -35,29 +34,11 @@ class NotAllowedError(PermissionError):
     pass
 
 
-@dataclass(frozen=True)
-class Viewer:
-    user_id: UUID | None
-    is_admin: bool
-
-
 @dataclass
 class Stores:
     uow_factory: StoresUnitOfWorkFactory
     ids: IdSource
     clock: Clock
-
-    async def context_for(self, viewer: Viewer | None) -> TenantContext:
-        if viewer is None or viewer.user_id is None:
-            return PUBLIC
-        if viewer.is_admin:
-            return TenantContext(ActorRole.ADMIN, viewer.user_id)
-        buyer = TenantContext(ActorRole.BUYER, viewer.user_id)
-        async with self.uow_factory(buyer) as uow:
-            owned = await uow.stores.owned_by(viewer.user_id)
-        if owned is None:
-            return buyer
-        return TenantContext(ActorRole.SELLER, viewer.user_id, owned.id)
 
     async def create(self, context: TenantContext, name: str, raw_slug: str) -> Store:
         if context.role is not ActorRole.BUYER or context.user_id is None:

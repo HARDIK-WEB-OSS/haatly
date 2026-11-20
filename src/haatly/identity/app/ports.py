@@ -3,7 +3,7 @@ from datetime import datetime
 from typing import Protocol, Self
 from uuid import UUID
 
-from haatly.identity.domain.model import Session, User
+from haatly.identity.domain.model import Session, SessionHolder, User
 from haatly.platform.kernel import TenantContext, UnitOfWork
 
 
@@ -42,7 +42,7 @@ class UserRepository(Protocol):
 class SessionRepository(Protocol):
     async def add(self, session: Session) -> None: ...
 
-    async def by_token_hash(self, token_hash: str) -> Session | None: ...
+    async def with_user(self, token_hash: str) -> SessionHolder | None: ...
 
     async def touch(self, session_id: UUID, now: datetime) -> None: ...
 

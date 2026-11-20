@@ -60,6 +60,12 @@ class Session:
 
 
 @dataclass(frozen=True)
+class SessionHolder:
+    session: Session
+    is_admin: bool
+
+
+@dataclass(frozen=True)
 class SessionPolicy:
     idle: timedelta = timedelta(hours=24)
     absolute: timedelta = timedelta(days=14)
