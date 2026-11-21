@@ -72,7 +72,7 @@ class Reconciler:
         async with self.uow_factory(SYSTEM) as uow:
             stale = await uow.intents.stale_pending(self.clock.now() - self.grace, self.batch_size)
         for intent_id in stale:
-            await self.applier.apply(intent_id)
+            await self.applier.apply(intent_id, SYSTEM)
         return len(stale)
 
     async def verify_applied(self) -> int:
@@ -119,7 +119,7 @@ class Reconciler:
             if state is None:
                 await self.flag(record.id, record.intent_id, UNKNOWN_TRANSFER)
             elif state.status is IntentStatus.PENDING:
-                await self.applier.apply(state.intent_id)
+                await self.applier.apply(state.intent_id, SYSTEM)
                 adopted += 1
             elif state.status is not IntentStatus.APPLIED:
                 await self.flag(

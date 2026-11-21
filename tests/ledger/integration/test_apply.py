@@ -53,8 +53,8 @@ async def test_applying_an_intent_writes_the_ledger_and_announces_it(
 ) -> None:
     new = inventory.receive(5)
     intent_id = await record(ledger_uow_factory, ids, clock, new)
-    assert await applier.apply(intent_id) is IntentStatus.APPLIED
-    assert await applier.apply(intent_id) is IntentStatus.APPLIED
+    assert await applier.apply(intent_id, SYSTEM) is IntentStatus.APPLIED
+    assert await applier.apply(intent_id, SYSTEM) is IntentStatus.APPLIED
     assert (await stock_balance(gateway, inventory)).credits_posted == 5
     events = await settled_events(ledger_uow_factory)
     assert [(event.aggregate_id, event.payload) for event in events] == [
@@ -82,9 +82,9 @@ async def test_a_hold_beyond_stock_is_rejected_with_the_ledger_code(
     clock: FrozenClock,
     inventory: Inventory,
 ) -> None:
-    await applier.apply(await record(ledger_uow_factory, ids, clock, inventory.receive(2)))
+    await applier.apply(await record(ledger_uow_factory, ids, clock, inventory.receive(2)), SYSTEM)
     hold_id = await record(ledger_uow_factory, ids, clock, inventory.hold(3))
-    assert await applier.apply(hold_id) is IntentStatus.REJECTED
+    assert await applier.apply(hold_id, SYSTEM) is IntentStatus.REJECTED
     async with ledger_uow_factory(SYSTEM) as uow:
         stored = await uow.intents.get(hold_id)
     assert stored is not None
@@ -103,7 +103,7 @@ async def test_concurrent_applies_of_one_intent_settle_it_once(
     inventory: Inventory,
 ) -> None:
     intent_id = await record(ledger_uow_factory, ids, clock, inventory.receive(7))
-    statuses = await asyncio.gather(*(applier.apply(intent_id) for _ in range(20)))
+    statuses = await asyncio.gather(*(applier.apply(intent_id, SYSTEM) for _ in range(20)))
     assert set(statuses) == {IntentStatus.APPLIED}
     assert (await stock_balance(gateway, inventory)).credits_posted == 7
     assert len(await settled_events(ledger_uow_factory)) == 1
@@ -117,11 +117,11 @@ async def test_fifty_buyers_racing_for_the_last_unit_get_one_hold(
     clock: FrozenClock,
     inventory: Inventory,
 ) -> None:
-    await applier.apply(await record(ledger_uow_factory, ids, clock, inventory.receive(1)))
+    await applier.apply(await record(ledger_uow_factory, ids, clock, inventory.receive(1)), SYSTEM)
     holds = [
         await record(ledger_uow_factory, ids, clock, inventory.hold(1, 600)) for _ in range(50)
     ]
-    statuses = await asyncio.gather(*(applier.apply(hold) for hold in holds))
+    statuses = await asyncio.gather(*(applier.apply(hold, SYSTEM) for hold in holds))
     assert statuses.count(IntentStatus.APPLIED) == 1
     assert statuses.count(IntentStatus.REJECTED) == 49
     balance = await stock_balance(gateway, inventory)
@@ -136,11 +136,11 @@ async def test_capture_posts_a_live_hold(
     clock: FrozenClock,
     inventory: Inventory,
 ) -> None:
-    await applier.apply(await record(ledger_uow_factory, ids, clock, inventory.receive(3)))
+    await applier.apply(await record(ledger_uow_factory, ids, clock, inventory.receive(3)), SYSTEM)
     hold = inventory.hold(2, 600)
-    await applier.apply(await record(ledger_uow_factory, ids, clock, hold))
+    await applier.apply(await record(ledger_uow_factory, ids, clock, hold), SYSTEM)
     capture_id = await record(ledger_uow_factory, ids, clock, inventory.capture(hold))
-    assert await applier.apply(capture_id) is IntentStatus.APPLIED
+    assert await applier.apply(capture_id, SYSTEM) is IntentStatus.APPLIED
     balance = await stock_balance(gateway, inventory)
     assert (balance.debits_pending, balance.debits_posted) == (0, 2)
 
@@ -153,17 +153,17 @@ async def test_an_expired_hold_counts_as_released_but_cannot_be_captured(
     clock: FrozenClock,
     inventory: Inventory,
 ) -> None:
-    await applier.apply(await record(ledger_uow_factory, ids, clock, inventory.receive(2)))
+    await applier.apply(await record(ledger_uow_factory, ids, clock, inventory.receive(2)), SYSTEM)
     released, captured = inventory.hold(1), inventory.hold(1)
-    await applier.apply(await record(ledger_uow_factory, ids, clock, released))
-    await applier.apply(await record(ledger_uow_factory, ids, clock, captured))
+    await applier.apply(await record(ledger_uow_factory, ids, clock, released), SYSTEM)
+    await applier.apply(await record(ledger_uow_factory, ids, clock, captured), SYSTEM)
     assert (await stock_balance(gateway, inventory)).debits_pending == 2
     await asyncio.sleep(inventory.hold_timeout_seconds + 1.5)
     assert (await stock_balance(gateway, inventory)).debits_pending == 0
     release_id = await record(ledger_uow_factory, ids, clock, inventory.release(released))
     capture_id = await record(ledger_uow_factory, ids, clock, inventory.capture(captured))
-    assert await applier.apply(release_id) is IntentStatus.APPLIED
-    assert await applier.apply(capture_id) is IntentStatus.REJECTED
+    assert await applier.apply(release_id, SYSTEM) is IntentStatus.APPLIED
+    assert await applier.apply(capture_id, SYSTEM) is IntentStatus.REJECTED
     async with ledger_uow_factory(SYSTEM) as uow:
         release = await uow.intents.get(release_id)
         capture = await uow.intents.get(capture_id)
@@ -184,7 +184,7 @@ async def test_an_account_defined_differently_in_the_ledger_flags_the_intent(
     stray = tb.Account(id=inventory.stock.id, ledger=inventory.stock.ledger, code=99)
     await raw_tigerbeetle.create_accounts([stray])
     intent_id = await record(ledger_uow_factory, ids, clock, inventory.receive(5))
-    assert await applier.apply(intent_id) is IntentStatus.FLAGGED
+    assert await applier.apply(intent_id, SYSTEM) is IntentStatus.FLAGGED
     async with ledger_uow_factory(SYSTEM) as uow:
         stored = await uow.intents.get(intent_id)
     assert stored is not None
@@ -194,7 +194,7 @@ async def test_an_account_defined_differently_in_the_ledger_flags_the_intent(
 
 async def test_unknown_intents_are_refused(applier: IntentApplier, ids: Uuid7Source) -> None:
     with pytest.raises(UnknownIntentError):
-        await applier.apply(ids.new_id())
+        await applier.apply(ids.new_id(), SYSTEM)
 
 
 class DownGateway:
@@ -215,7 +215,7 @@ async def test_an_unreachable_ledger_leaves_the_intent_pending(
     down = IntentApplier(ledger_uow_factory, DownGateway(gateway), ids, clock)  # type: ignore[arg-type]
     intent_id = await record(ledger_uow_factory, ids, clock, inventory.receive(5))
     with pytest.raises(LedgerUnavailableError):
-        await down.apply(intent_id)
+        await down.apply(intent_id, SYSTEM)
     async with ledger_uow_factory(SYSTEM) as uow:
         stored = await uow.intents.get(intent_id)
     assert stored is not None

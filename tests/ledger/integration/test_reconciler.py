@@ -104,7 +104,7 @@ async def test_a_crash_before_the_ledger_call_is_repaired_with_zero_drift(
     new = inventory.receive(5)
     intent_id = await record(ledger_uow_factory, ids, clock, new)
     with pytest.raises(SimulatedCrashError):
-        await crashing_applier(applier, after_ledger_write=False).apply(intent_id)
+        await crashing_applier(applier, after_ledger_write=False).apply(intent_id, SYSTEM)
     assert await gateway.lookup_transfers(new.transfer_ids) == []
 
     within_grace = await reconciler.run()
@@ -131,7 +131,7 @@ async def test_a_crash_after_the_ledger_call_is_adopted_without_waiting(
 ) -> None:
     intent_id = await record(ledger_uow_factory, ids, clock, inventory.receive(5))
     with pytest.raises(SimulatedCrashError):
-        await crashing_applier(applier, after_ledger_write=True).apply(intent_id)
+        await crashing_applier(applier, after_ledger_write=True).apply(intent_id, SYSTEM)
     report = await reconciler.run()
     assert (report.adopted, report.settled_pending, report.clean) == (1, 0, True)
     assert (await stored(ledger_uow_factory, intent_id)).status is IntentStatus.APPLIED
@@ -248,7 +248,7 @@ async def test_balances_are_compared_with_projections(
     clock: FrozenClock,
     inventory: Inventory,
 ) -> None:
-    await applier.apply(await record(ledger_uow_factory, ids, clock, inventory.receive(5)))
+    await applier.apply(await record(ledger_uow_factory, ids, clock, inventory.receive(5)), SYSTEM)
     reconciler.projections = (
         StockProjection("display_stock", {inventory.stock.id: 5}),
         StockProjection("stale_stock", {inventory.stock.id: 4}),
@@ -268,7 +268,7 @@ async def apply_with_random_crash(
 ) -> None:
     intent_id = await record(factory, ids, clock, new)
     try:
-        await rng.choice(appliers).apply(intent_id)
+        await rng.choice(appliers).apply(intent_id, SYSTEM)
     except SimulatedCrashError:
         return
 

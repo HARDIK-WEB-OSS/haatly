@@ -5,6 +5,7 @@ from uuid import UUID
 
 from sqlalchemy import Row, bindparam, func, select, update
 from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncConnection
 
 from haatly.ledger.adapters.tables import (
@@ -15,6 +16,7 @@ from haatly.ledger.adapters.tables import (
     intents,
     transfers,
 )
+from haatly.ledger.app.intents import IntentConflictError
 from haatly.ledger.app.ports import AccountConflictError, DriftEntry, IntentState
 from haatly.ledger.domain.ids import id_from_uuid, uuid_from_id
 from haatly.ledger.domain.model import (
@@ -27,6 +29,7 @@ from haatly.ledger.domain.model import (
     TransferSpec,
 )
 from haatly.ledger.domain.outcomes import Settlement
+from haatly.platform.public import is_unique_violation
 
 TIGERBEETLE_CURSOR = "tigerbeetle"
 
@@ -111,6 +114,15 @@ class SqlIntentRepository:
         self.connection = connection
 
     async def add(self, intent: Intent) -> None:
+        try:
+            async with self.connection.begin_nested():
+                await self.insert(intent)
+        except IntegrityError as error:
+            if is_unique_violation(error):
+                raise IntentConflictError from error
+            raise
+
+    async def insert(self, intent: Intent) -> None:
         await self.ensure_accounts(intent.accounts, intent.created_at)
         await self.connection.execute(
             insert(intents).values(
@@ -119,6 +131,9 @@ class SqlIntentRepository:
                 reference_id=intent.reference_id,
                 status=intent.status.value,
                 created_at=intent.created_at,
+                actor_role=func.platform.actor_role(),
+                user_id=func.platform.actor_user_id(),
+                store_id=func.platform.actor_store_id(),
             )
         )
         if intent.accounts:

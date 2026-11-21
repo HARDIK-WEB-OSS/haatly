@@ -8,7 +8,8 @@ APPLY_INTENT_JOB = "ledger.apply_intent"
 
 
 class IntentConflictError(ValueError):
-    pass
+    def __init__(self) -> None:
+        super().__init__("intent conflict")
 
 
 def backstop_job(intent: Intent, delay: timedelta) -> NewJob:
@@ -26,7 +27,7 @@ async def record_intent(
     existing = await uow.intents.find_by_reference(new.kind, new.reference_id)
     if existing is not None:
         if not existing.matches(new):
-            raise IntentConflictError(f"{new.kind} {new.reference_id}")
+            raise IntentConflictError
         return existing
     intent = Intent(
         id=ids.new_id(),

@@ -4,7 +4,7 @@ from uuid import UUID
 from haatly.ledger.app.ports import LedgerGateway, LedgerUnitOfWorkFactory
 from haatly.ledger.domain.model import Intent, IntentStatus
 from haatly.ledger.domain.outcomes import Settlement, settle_accounts, settle_transfers
-from haatly.platform.kernel import SYSTEM, Clock, IdSource, NewEvent, record_event
+from haatly.platform.kernel import Clock, IdSource, NewEvent, TenantContext, record_event
 
 INTENT_SETTLED = "ledger.intent_settled"
 
@@ -33,8 +33,8 @@ class IntentApplier:
     ids: IdSource
     clock: Clock
 
-    async def load(self, intent_id: UUID) -> Intent:
-        async with self.uow_factory(SYSTEM) as uow:
+    async def load(self, intent_id: UUID, context: TenantContext) -> Intent:
+        async with self.uow_factory(context) as uow:
             intent = await uow.intents.get(intent_id)
         if intent is None:
             raise UnknownIntentError(str(intent_id))
@@ -47,12 +47,12 @@ class IntentApplier:
         codes = await self.gateway.create_transfers(intent.id, intent.transfers)
         return settle_transfers(intent.transfers, codes)
 
-    async def apply(self, intent_id: UUID) -> IntentStatus:
-        intent = await self.load(intent_id)
+    async def apply(self, intent_id: UUID, context: TenantContext) -> IntentStatus:
+        intent = await self.load(intent_id, context)
         if intent.status is not IntentStatus.PENDING:
             return intent.status
         settlement = await self.submit(intent)
-        async with self.uow_factory(SYSTEM) as uow:
+        async with self.uow_factory(context) as uow:
             if await uow.intents.settle(intent.id, settlement, self.clock.now()):
                 await record_event(uow, self.ids, self.clock, settled_event(intent, settlement))
         return settlement.status
