@@ -1,6 +1,7 @@
 # 0014 Ledger intents, the TigerBeetle adapter and the platform kernel
 
-- Status: Implemented (0719c34)
+- Status: Implemented (0719c34, d471cc8, 4237b7b). The API runs the TigerBeetle client from
+  d471cc8; row-level security on the ledger tables from 4237b7b.
 - Date: 2026-11-18
 
 ## Context
@@ -58,7 +59,9 @@ status and code. Owning modules move their domain state from that event, whichev
 
 ### Who applies
 
-- The request handler may apply inline (`IntentApplier.apply`).
+- The request handler may apply inline (`IntentApplier.apply`). Since 4237b7b `apply` takes the
+  caller's tenant context, with no default: a request handler applies the intent it recorded in
+  its own context, and the backstop job and the reconciler pass `system`.
 - `record_intent` enqueues a `ledger.apply_intent` backstop job in the same transaction, delayed
   by `HAATLY_LEDGER_BACKSTOP_SECONDS` (30 s). The job is a no-op once the intent is settled.
 - The reconciler (`ledger.reconcile`, every `HAATLY_LEDGER_RECONCILE_EVERY_SECONDS`, default 60 s)
@@ -101,8 +104,10 @@ A run is clean when there is no open drift and no mismatch. A dirty run logs a w
 - The TigerBeetle **client** library also uses io_uring on Linux. Under Docker's default seccomp
   profile the worker panicked at start with `failed to initialize IO: PermissionDenied`.
   The compose smoke boot still passed, because it only checked `/ready` on the API.
-- The `worker` service now gets `seccomp:unconfined` too. The `api` service will need the same
-  when it applies checkout holds inline (M4).
+- The `worker` service now gets `seccomp:unconfined` too. The `api` service got the same in
+  d471cc8, when it began opening a TigerBeetle client at start for the readiness check and for
+  checkout holds. `/ready` now reports `ledger unavailable` (503) when TigerBeetle does not
+  answer within the gateway's timeout.
 - The smoke task now also requires the worker to still be running 10 s after boot. With the
   exemption removed it fails with `worker is 'exited'`.
 - `seccomp:unconfined` on the `tigerbeetle`, `worker` and `api` services is accepted for
@@ -111,6 +116,37 @@ A run is clean when there is no open drift and no mismatch. A dirty run logs a w
   It is Docker's default profile plus only the io_uring syscalls (`io_uring_setup`,
   `io_uring_enter`, `io_uring_register`). The smoke test proves the stack runs under it: the API
   is ready and the worker is still running.
+
+### Row-level security (from 4237b7b)
+
+From M4 the ledger holds per-store and per-order data, and checkout records hold intents from a
+buyer's transaction. Every ledger table has `FORCE ROW LEVEL SECURITY`.
+
+| Table | Who sees or changes what |
+|---|---|
+| `intents` | the owner (the role, user and store that recorded it) reads, records and settles it; `system` all |
+| `transfers`, `intent_accounts` | whoever can see the parent intent; `system` all |
+| `accounts` | any real actor reads and creates; only `system` changes |
+| `drift`, `cursors` | `system` only |
+
+- **Owner.** The owner columns are written in SQL from `platform.actor_role()`,
+  `actor_user_id()` and `actor_store_id()`. The owner is therefore the recording transaction's
+  context by construction; no caller passes it.
+- **Accounts.** They are readable by every real actor because `ensure_accounts` must run
+  `INSERT … ON CONFLICT DO NOTHING` and compare the stored spec, and Postgres checks the read
+  policy for both. An account row is id, ledger, code and flags; it holds no balance or amount.
+- **Generic conflict.** Recording a reference that another actor already holds is invisible to
+  the caller, so the insert hits the unique `(kind, reference_id)` constraint. `add` runs in a
+  savepoint and turns any unique violation into `IntentConflictError("intent conflict")`. A
+  same-owner mismatch raises exactly the same error. The error therefore does not reveal whether
+  someone else's intent exists, and the caller's transaction stays usable.
+- **Why not "only `system` reads".** That model, borrowed from the outbox (ADR 0003), was
+  rejected. It would have made `record_intent` non-idempotent for tenants, broken
+  `ensure_accounts`, and forced inline applies to run as `system`. The spec allows `system` only
+  for authentication and jobs.
+- **Tests.** Six tests cover owners, strangers, sellers and admins, the generic conflict, shared
+  accounts, system-only drift and cursors, and a transaction with no context. Disabling the
+  policies fails five of them; the sixth checks the owner columns.
 
 ### Platform kernel
 

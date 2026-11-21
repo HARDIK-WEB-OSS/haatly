@@ -154,6 +154,10 @@ Acceptance is one transaction:
 
 ### HTTP
 
+- Every business route is served under `/v1` (from 2ef8b73, review finding L4), before the
+  Razorpay webhook URL becomes the first URL an outside party stores. `/health` and `/ready` stay
+  unversioned: compose healthchecks and the smoke task call them, and they are not part of the
+  API contract.
 - One error shape: `{"error": {"code", "message", "request_id"}}`, with the request id also in
   `X-Request-ID`. Validation errors name the fields but never echo the submitted values.
   Unexpected errors are logged and returned as a generic 500.

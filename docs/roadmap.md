@@ -34,10 +34,11 @@ proposed deploying before checkout; that plan was not adopted, and the milestone
   store A's ids and expects no change. Document `stores.owner_of` as internal-only.
 - **L3 misleading error.** An admin calling `POST /stores` gets `already_has_store`; it should be a
   403 "admins cannot open stores".
-- **L4 no `/v1` prefix.** Mount the routers under `/v1` before the Razorpay webhook URL is
-  registered, because that is the first external client.
-- **L6 readiness ignores TigerBeetle.** Checkout holds make the API call TigerBeetle inline, so
-  `/ready` must check it from M4.
+- **Done (2ef8b73): L4 `/v1` prefix.** Every business route is under `/v1`; `/health` and
+  `/ready` are not.
+- **Done (d471cc8): L6 readiness checks TigerBeetle.** The API opens a TigerBeetle client at
+  start and `/ready` reports `ledger unavailable` when it does not answer.
+- **Done (4237b7b): row-level security on the ledger tables** (ADR 0014).
 - **L8 repeat approve.** Approving an already-decided member returns 404; return 409
   "already decided".
 - **Dead jobs in admin.** `list_dead_jobs` and `retry_dead_job` exist (ADR 0003) but no admin
